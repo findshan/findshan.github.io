@@ -1,0 +1,7 @@
+# TODO: when you're ready to be findable on Google, change this to:
+#   User-agent: *
+#   Disallow:
+# (with an empty Disallow), or just delete this file entirely.
+
+User-agent: *
+Disallow: /
