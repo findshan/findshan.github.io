@@ -34,20 +34,11 @@
         </header>
 
         <section>
-            <div class="empty-state">
-                <span class="empty-icon"><i class="fas fa-feather-alt"></i></span>
-                The first note is on its way. Check back after I land in graduate school.
-            </div>
-
-            <!-- TODO: write first blog post, drop the file in posts/, then replace the
-                 .empty-state above with a list of .post-list-item blocks like this:
-
             <div class="post-list-item">
-                <a href="posts/2026-first-note.html" class="post-title">Your post title here</a>
-                <div class="post-meta">2026/XX/XX &middot; Essay &middot; X min read</div>
-                <div class="post-excerpt">A one-sentence excerpt that previews the post.</div>
+                <a href="posts/2026-cti-inference-optimization.html" class="post-title">把一个固定模型的推理从 238s 压到 30s:生成式推荐排序推理优化赛工程复盘</a>
+                <div class="post-meta">2026 &middot; 工程复盘 / GPU · Triton &middot; 约 12 分钟</div>
+                <div class="post-excerpt">一道"只许加速、不许改模型"的性能优化赛题——从百度大赛官方 baseline(fp32 直跑 ~238s)出发,用精度/算法重构 + 4 个手写 Triton kernel,把同一份模型的推理做到约 8×(238s→30s),且 AUC/PCOC 全程等价。</div>
             </div>
-            -->
         </section>
     </div>
 </main>

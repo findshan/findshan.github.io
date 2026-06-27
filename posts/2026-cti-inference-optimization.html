@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>把一个固定模型的推理从 238s 压到 30s:一次生成式推荐排序推理优化赛的工程复盘 &mdash; Wenshan Deng</title>
+    <meta name="robots" content="noindex,nofollow">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght,SOFT,WONK@0,9..144,400..700,30..100,0..1;1,9..144,400..600,30..100,0..1&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,500;0,8..60,600;0,8..60,700;1,8..60,400;1,8..60,500&family=Inter:wght@400;500;600;700&family=Noto+Serif+SC:wght@500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="../css/style.css?v=20260519">
+    <script src="../js/main.js?v=20260519" defer></script>
+</head>
+<body>
+
+<nav class="site-nav" aria-label="Primary">
+    <div class="nav-wrapper">
+        <a href="../index.html" class="nav-brand"><span class="dot" aria-hidden="true"></span>Wenshan Deng</a>
+        <div class="nav-links">
+            <a href="../index.html">About</a>
+            <a href="../publications.html">Projects</a>
+            <a href="../blog.html" class="active">Blog</a>
+        </div>
+    </div>
+</nav>
+
+<main>
+    <div class="wrap">
+        <article class="longform-post">
+            <header class="post-header">
+                <p class="post-kicker">Engineering · GPU / Triton</p>
+                <h1 class="post-title">把一个固定模型的推理从 238s 压到 30s:一次生成式推荐排序推理优化赛的工程复盘</h1>
+                <div class="post-meta">2026 · findshan · 约 12 分钟</div>
+            </header>
+            <div class="post-content">
+<blockquote><p><strong>作者:findshan</strong>　·　赛事:<strong>百度商业 AI 技术创新大赛 —— 生成式推荐广告排序推理性能优化</strong>(百度 / 飞桨 AI Studio 主办)</p></blockquote>
+<blockquote><p>一道&quot;只许加速、不许改模型&quot;的性能优化赛题。本文从官方 baseline(fp32 直跑 ~238s)讲起,按真实迭代顺序,记录我如何在严格合规约束下,用精度/算法重构 + 4 个手写 Triton kernel,把同一份模型的推理延迟做到 <strong>约 8×</strong>(238s → ~30s),且 AUC/PCOC 全程等价。</p></blockquote>
+<hr>
+<h2>一、赛题:这是一道性能优化题,不是建模题</h2>
+<p>赛题是<strong>生成式推荐广告排序的推理性能优化</strong>:模型权重、组网结构全部固定,我要做的只有一件事——<strong>让它跑得更快</strong>,同时保证预测质量不下降。</p>
+<p>评分公式:</p>
+<pre><code>score      = score_latency * 70 + score_model * 30
+score_latency = max(0, (300 - latency) / 300)
+score_model   = ((auc - 0.65) * 1000 + (0.15 - |pcoc - 1|)/0.15 * 10) / 360
+               # 若 pcoc ∉ [0.85, 1.15] 或 auc ∉ [0.65, 1],score_model 记 0</code></pre>
+<p>两个关键含义:</p>
+<ol><li><strong>延迟占 70 分,是绝对主战场。</strong> 模型分以 baseline 为上限——你没法靠&quot;调得更准&quot;加分,只能靠&quot;别掉下来&quot;保分。</li><li><strong>质量是硬门槛。</strong> PCOC 一旦跌出 [0.85, 1.15],模型分直接归零,几秒的提速换不回这 9 分。</li></ol>
+<p>合规红线(官方明确):</p>
+<ul><li><strong>不能改组网</strong>(裁层、删 expert 等视为违规,不计分);</li><li><strong>不能对序列采样或截断</strong>;</li><li><strong>量化等导致指标下降会扣分,超出范围记 0</strong>。</li></ul>
+<p>这几条几乎框死了所有&quot;偷懒式提速&quot;。能做的,只有<strong>在不改变数学输出的前提下,把同样的计算算得更快</strong>。</p>
+<hr>
+<h2>二、官方 baseline:模型长什么样</h2>
+<p>官方模型是一个序列推荐 CTR 模型,主体三段:</p>
+<ul><li><strong>RepEncoder</strong>:28 个特征 slot,每个 slot 做 embedding 查表 + 按样本池化(sum pooling),拼成 <code>[N, 28×512]</code>,再过 LayerNorm + Linear 投影到 <code>d_model=512</code>。</li><li><strong>TransformerEncoder(8 层)</strong>:每层 = 多头注意力(8 头)+ <strong>SMoE</strong>(8 个 expert,每 token 选 top-2)。注意力是<strong>块对角因果</strong>:一个 batch 把多个用户的行为序列拼成一条长度 N 的序列,每个用户内部做因果自注意力,用户之间互相屏蔽。</li><li>最后一层 Linear 输出 logit。</li></ul>
+<p>一个 batch 里 N≈5000 个 token、约 20 个用户,用户长度极不均(最长能到 3000+)。这些数字后面很关键。</p>
+<p><strong>官方 baseline 的起点:fp32 原样直跑,平台实测延迟 ~238s。</strong> 这就是一切的零点。整条优化之路自然分成两段:第一段靠精度与算法重构,把 238s 砍到 ~68s(~3.5×);第二段靠手写 kernel,把 68s 再砍到 ~30s(~2.3×)。下面按这个顺序展开。</p>
+<hr>
+<h2>三、第一个、也是最重要的认知:平台到底怎么跑你的代码</h2>
+<p>动手前必须搞清楚评测机制,否则会白干。我通过逆向官方评测流程确认:</p>
+<ul><li>平台的 <code>evaluation.py</code> 只 <code>import load_model</code>,然后直接驱动 <code>model(batch)</code>;</li><li><strong><code>main()</code> 是死代码</strong>——你在 <code>main()</code> 里写的任何 autocast、compile、预处理,平台一行都不会执行;</li><li><strong>整个 <code>forward</code> 都被计时</strong>;</li><li><strong>数据通路里加 CPU 计算会严重反噬</strong>(我后来实测:在数据搬运里做一次 CPU gather,本地 5.7s 的活到平台变成 45s)。</li></ul>
+<p>这条认知推翻了一类常见做法:&quot;把预处理挪到计时窗口外&quot;在本地很好看,<strong>在平台一秒都省不到</strong>——因为平台没有&quot;窗口外&quot;,<code>forward</code> 里的活该做还得做。<strong>唯一有效的方向是:让 <code>forward</code> 里总的计算/启动更少。</strong></p>
+<p>唯一的例外是 <code>load_model()</code>——它属于初始化,不计入推理延迟。这个细节后面救了我(编译/预热成本可以藏在这里)。</p>
+<hr>
+<h2>四、第一阶段:不写 kernel 的合规加速</h2>
+<h3>4.1 精度与后端(fp16 + TF32 + flash SDPA)</h3>
+<p>把模型 <code>model.half()</code> 转 fp16,打开 TF32 与 flash/mem-efficient SDPA。fp16 只带来 ~0.0001 的 AUC 漂移(噪声级,PCOC 不变),换来可观的吞吐。<strong>仅这一步,就把 fp32 原样的 ~238s 拉到了 ~68s 量级(~3.5×)</strong>——精度选对是性价比最高的一刀。这一版同时作为后续 kernel 工作的受控基线:<strong>本地全量(2039 batch)forward = 68s</strong>。</p>
+<blockquote><p>之所以拿这版当基线,是因为后面所有版本都在<strong>同一台机器、同一份测试集、同样输入</strong>下测,数字才可比。机器本身的日内波动可达数倍,跨机/跨时间的比较没有意义。</p></blockquote>
+<h3>4.2 一个算法层面的关键观察:被 mask 掉的 O(N²) 是纯浪费</h3>
+<p>原始注意力把整个 batch 的用户拼成长度 N 的序列,做一次 O(N²) 的注意力,再用一个 <code>[N, N]</code> 的块对角因果 mask 把跨用户部分清零。</p>
+<p>但有个被忽视的物理事实:<strong>带自定义 mask 的 flash / mem-efficient SDPA 并不会跳过被 mask 的块</strong>——它照样把完整的 N² 算出来再 mask。实测每 batch N≈5000、20 个用户,dense 的计算量是&quot;真实块对角&quot;的 ~13×,绝大部分在白算。</p>
+<p>修正方法:用户的 token 在 batch 里本来就是按用户连续排列的。于是<strong>逐用户切片、对每个用户单独跑 <code>is_causal=True</code> 的 SDPA</strong>——<code>is_causal</code> 让 flash kernel 跳过上三角、且完全不物化 mask。数学完全等价(逐位验证 AUC 不变),本地 68s → ~50s。</p>
+<h3>4.3 顺手的两个无风险小优化</h3>
+<ul><li><strong>baddbmm 融合 bias</strong>:MoE 的 <code>bmm + bias</code> 合成一次 <code>torch.baddbmm</code>,省掉作用在 <code>[8, N, 1024]</code> 这种 8 倍宽中间张量上的大 elementwise add。</li><li><strong>跳过 moe_loss</strong>:<code>importance.std()/mean</code> 是训练用的负载均衡辅助项,推理根本不用,直接不算。</li></ul>
+<p>两者数值等价,本地 50s → 47.5s。</p>
+<p>这一阶段到此:<strong>68s → 47.5s,1.43×,全程 AUC/PCOC 等价</strong>,且一行 kernel 都没写。</p>
+<hr>
+<h2>五、第二阶段:先 profile,再决定写什么 kernel</h2>
+<p>继续往下,关键是<strong>不要凭直觉,要看 profile</strong>。这一步省下了大量在错误方向上的时间。</p>
+<p><code>forward</code> 的 CUDA 时间分布(实测):</p>
+<div class="table-wrap"><table><thead><tr><th>算子</th><th>占比</th><th>是什么</th></tr></thead><tbody><tr><td>MoE 的 bmm</td><td><strong>~41%</strong></td><td>8 个 expert 全算</td></tr><tr><td>flash attention</td><td>~11%</td><td>注意力</td></tr><tr><td>addmm</td><td>~10%</td><td>qkv / out / gate / 最后的线性层</td></tr><tr><td>segment_reduce + index_select</td><td>~21%</td><td>RepEncoder 的 28 次查表 + 28 次池化</td></tr></tbody></table></div>
+<p><strong>MoE 是最大的肥肉</strong>:dense 实现把 8 个 expert 全算了,但每个 token 只用 top-2,<strong>4× 是纯浪费</strong>。这是头号目标。</p>
+<h3>5.1 一条重要纪律:很多&quot;显然该快&quot;的做法,实测都更慢</h3>
+<p>在动手写 kernel 前,我先试了几条&quot;理应更快&quot;的 PyTorch 级方案,结果<strong>全部反优化</strong>:</p>
+<div class="table-wrap"><table><thead><tr><th>尝试</th><th>预期</th><th>实测</th><th>原因</th></tr></thead><tbody><tr><td>稀疏 MoE(sort + grouped GEMM)</td><td>省 4× FLOPs</td><td>50s → <strong>63s</strong></td><td>sort/gather/scatter/同步的开销 &gt; 省下的算力</td></tr><tr><td><code>torch.compile</code>(max-autotune)</td><td>kernel 融合</td><td>本地快、<strong>平台反优化</strong></td><td>对隐藏测试集的新形状会在计时窗内重新 autotune</td></tr><tr><td>nested-tensor 注意力</td><td>单次启动</td><td>49s → <strong>127s</strong></td><td>jagged 构造 + kernel 开销巨大</td></tr><tr><td>int8 / int4 量化</td><td>低比特更快</td><td>更慢 + 掉精度</td><td>没有可用 int4 GEMM kernel;且量化掉点触发扣分</td></tr><tr><td>各种&quot;预处理搬出窗口&quot;</td><td>省时间</td><td>平台无效</td><td>平台整个 forward 都计时</td></tr></tbody></table></div>
+<p><strong>结论:这是一台&quot;高效 GEMM 受限&quot;的机器——dense 的 cuBLAS/cutlass kernel 已经很强,把它拆碎反而亏。</strong> 想赢,得写一个比&quot;框架算子组合&quot;开销更低的融合 kernel。这才轮到 Triton 出场。</p>
+<h3>5.2 Kernel 一:Triton fused MoE</h3>
+<p>稀疏 MoE 慢在哪?不在矩阵乘(grouped GEMM 本身没问题),而在外围的 <strong>sort / gather / scatter 物化大张量</strong>。</p>
+<p>手写 Triton kernel 的思路:<strong>把 gather/scatter 直接融进 GEMM</strong>——</p>
+<ul><li>fc1 kernel:按排序后的 token 索引<strong>直接从原张量读</strong>(gather 融入 load),算完 relu 写出 h;</li><li>fc2 kernel:算完直接按 score 加权、用 atomic-add <strong>散射回输出</strong>(scatter 融入 store)。</li></ul>
+<p>中间不再物化 <code>xg</code>、不再 <code>index_add</code>。单测对齐 dense:max abs err 9.8e-04(fp16 噪声级)。 全量:<strong>47.5s → 42s</strong>,AUC 等价。</p>
+<blockquote><p>对照实验很说明问题:同样是稀疏 MoE,手写 PyTorch 版 -25%,内置 <code>grouped_mm</code> 版 +6%,手写 Triton fused 版 +12%。<strong>瓶颈从来是 kernel 质量,不是思路。</strong></p></blockquote>
+<h3>5.3 Kernel 二:Triton RepEncoder 池化</h3>
+<p>RepEncoder 在平台上跑的是回退路径:<strong>28 次 embedding 查表 + 28 次 segment_reduce + 一次 cat</strong>,56 个小 kernel 外加一次大拷贝。</p>
+<p>写一个 kernel:grid 是 <code>(N, 28)</code>,每个 program 负责一个 (样本, slot) 的池化——按段 gather embedding 行、fp32 累加,<strong>直接写进 <code>[N, 28×512]</code> 的最终布局</strong>,省掉 cat/permute 的大拷贝。56 个 op → 1 个 kernel。</p>
+<p>全量:<strong>42s → 36s</strong>,AUC 等价。</p>
+<h3>5.4 Kernel 三:Triton varlen flash attention(最大的一刀)</h3>
+<p>这一步前,我又 profile 了一次,发现一个反直觉的事实:</p>
+<blockquote><p><strong>此时瓶颈已经不是 GPU,而是 CPU 调度。</strong> 总 CPU 时间 1.96s ≫ CUDA 1.02s。头号 CPU 消耗是注意力:逐用户的 SDPA 循环每 batch 要发起 160 次(20 用户 × 8 层)kernel 调用,光 CPU dispatch 就 754ms,而它的 GPU 计算只有 216ms。</p></blockquote>
+<p>也就是说,4.2 节那个&quot;逐用户 <code>is_causal</code> SDPA&quot;虽然算法对,但<strong>实现上被 Python 循环的启动开销拖住了</strong>。</p>
+<p>解法是一个 <strong>varlen flash attention kernel</strong>(flash-attn-2 的在线 softmax + 因果掩码,用 <code>cu_seqlens</code> 描述每个用户的边界):<strong>所有用户一次 kernel 启动搞定</strong>,160 次 dispatch → 1 次。block→user 的映射每个 forward 只建一次,8 层复用。</p>
+<p>单测对齐逐用户 SDPA(含 3160 长用户、单用户等极端情况):max err ~1e-3。 全量:<strong>36s → ~30s</strong>,AUC 等价。</p>
+<hr>
+<h2>六、最终结果</h2>
+<div class="table-wrap"><table><thead><tr><th>版本</th><th>关键改动</th><th>全量 forward</th><th>相对官方 baseline</th></tr></thead><tbody><tr><td>官方 baseline</td><td>fp32 原样直跑</td><td>~238s</td><td>1.0×</td></tr><tr><td>第一阶段起点</td><td>fp16 + TF32 + flash SDPA</td><td>68s</td><td>~3.5×</td></tr><tr><td>—</td><td>逐用户 varlen 注意力</td><td>50s</td><td>~4.8×</td></tr><tr><td>—</td><td>+ baddbmm 融合 + 跳过 moe_loss</td><td>47.5s</td><td>~5.0×</td></tr><tr><td>—</td><td>+ Triton fused-MoE</td><td>42s</td><td>~5.7×</td></tr><tr><td>—</td><td>+ Triton rep-pool</td><td>36s</td><td>~6.6×</td></tr><tr><td><strong>最终</strong></td><td><strong>+ Triton varlen flash-attn</strong></td><td><strong>~30s</strong></td><td><strong>~8×</strong></td></tr></tbody></table></div>
+<blockquote><p>注:238s 是平台对 fp32 原样的实测延迟,作为绝对零点;68s 起为同一台机器、同一份测试集下的受控对比,kernel 阶段的相对提升(68s→30s,~2.3×)在此口径下测得。</p></blockquote>
+<ul><li><strong>两阶段、约 8× 加速</strong>:精度/算法重构(238s→68s)+ <strong>4 个手写 Triton kernel</strong>(MoE fc1 / fc2、rep-pool、varlen flash-attn,68s→~30s),把固定模型的推理从 ~238s 干到 ~30s。</li><li><strong>全程 AUC / PCOC 等价</strong>(最大漂移 ~2e-4,纯 fp16 噪声),PCOC 始终在 [0.85, 1.15] 内。</li><li><strong>完全合规</strong>:组网、层数、权重一字未动,无任何序列截断/采样,无量化掉点。</li><li>工程上做了完整护栏:三个 Triton 开关各自带<strong>数值自检 + dense 回退</strong>,任一 kernel 在目标环境不可用(如缺 triton)就各自退回原生实现,最坏情况退回纯 PyTorch 版本——<strong>保证正确性优先,加速其次</strong>。编译与预热全部放进不计时的 <code>load_model()</code>。</li></ul>
+<hr>
+<h2>七、方法论:这次真正学到的东西</h2>
+<ol><li><strong>先搞清楚&quot;代码是怎么被执行/计时的&quot;,再优化。</strong> 平台只计 <code>forward</code>、<code>main()</code> 是死代码——这个认知直接决定了哪些优化有效、哪些是自我安慰。</li><li><strong>测量,不要假设。</strong> &quot;稀疏省 FLOPs&quot;&quot;低比特更快&quot;&quot;compile 一定快&quot;这些直觉,在这台机器上几乎全错。每一条都用受控实验证伪/证实,才敢上。</li><li><strong>profile 要看对维度。</strong> 当瓶颈从 GPU 转到 CPU 调度时,继续优化 GPU kernel 是没用的;真正的解法是&quot;把 160 次启动变成 1 次&quot;。</li><li><strong>框架算子打不过的地方,手写 kernel 能打。</strong> 但前提是瓶颈在调度/融合/无效计算,而不是在已经高度优化的 dense GEMM 上——后者别碰。</li><li><strong>合规是设计约束,不是事后检查。</strong> 从第一行就守住&quot;数学等价&quot;,反而逼出了更干净、更通用的优化(varlen 注意力、融合 kernel),而不是脆弱的取巧。</li></ol>
+<p>一句话:<strong>在&quot;不许改模型&quot;的牢笼里,把同样的数学算得更快,本身就是一门硬功夫。</strong> 从 ~238s 到 ~30s(约 8×),靠的不是某个 trick,而是&quot;理解机制 → 量化定位 → 写 kernel 验证 → 守住正确性&quot;这套闭环。</p>
+            </div>
+            <div class="post-footer-actions">
+                <a href="../blog.html" class="btn"><i class="fas fa-arrow-left"></i> 返回 Blog</a>
+            </div>
+        </article>
+    </div>
+</main>
+
+<footer class="site-footer">
+    <span>&copy; <span data-year>2026</span> Wenshan Deng</span>
+    <span class="sep">·</span>
+    <span>Guangzhou</span>
+</footer>
+
+</body>
+</html>
