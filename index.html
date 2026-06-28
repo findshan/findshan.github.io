@@ -58,12 +58,14 @@
                     emergent intelligence.
                 </p>
                 <p>
-                    My undergraduate thesis proposes <strong>SOHC</strong> (SO(n) Orthogonal
-                    Hyper-Connections), enforcing rotation-group constraints on residual
-                    structures via Cayley transforms — yielding +8.5% MRR on ML-100K and
-                    +3.6% MRR on ML-1M. I also bring hands-on industrial ML experience:
-                    <strong>Top 4% nationally at TAAC2025</strong> and active participation
-                    in <strong>KDD Cup 2026</strong>.
+                    My current focus is <strong>agent harness engineering</strong> and
+                    <strong>systems performance</strong> — building reliable, low-latency
+                    runtimes for LLM-driven agents. Recent work spans GPU kernel optimization
+                    (4 hand-written Triton kernels, <strong>~8× speedup</strong> on a fixed-model
+                    recommendation inference task — see the <a href="blog.html">blog</a>),
+                    open-source MCP runtime experimentation in Zig, and large-scale industrial
+                    recommendation systems — <strong>KDD Cup 2026 Top 5%</strong> nationally
+                    (rank 207 / 4000+) and <strong>TAAC2025 Top 4%</strong> as team leader.
                 </p>
 
                 <div class="interests">
@@ -99,14 +101,18 @@
             </header>
             <ul class="news-list">
                 <li>
-                    <span class="date-tag">2026/01</span>
-                    <span>Completed core <strong>SOHC</strong> thesis experiments: +8.5% MRR on ML-100K and +3.6% MRR on ML-1M, consistently outperforming mHC baselines.</span>
+                    <span class="date-tag">2026/06</span>
+                    <span>Published an engineering retrospective: <a href="posts/2026-cti-inference-optimization.html"><strong>238s → 30s</strong> via 4 hand-written Triton kernels with full numerical equivalence</a> — Baidu CTI optimization challenge.</span>
+                </li>
+                <li>
+                    <span class="date-tag">2026/06</span>
+                    <span>Finished <strong>KDD Cup 2026 Uni-Rec Challenge</strong>: rank <strong>207 / 4000+</strong>, final score 0.829, <strong>Top 5% nationally</strong>.</span>
                 </li>
                 <li>
                     <span class="date-tag">2025</span>
                     <span>Led team at <strong>TAAC2025 (Tencent Advertising Algorithm Competition)</strong>. Applied InfoNCE contrastive learning to achieve 7× score improvement (0.014 → 0.096), ranking <strong>Top 4% nationally</strong>.</span>
                 </li>
-                <!-- TODO: add new entries as they happen (paper submissions, KDD Cup result, grad-school admission, etc.) -->
+                <!-- TODO: add new entries as they happen (grad-school admission, open-source PRs merged, new blog posts, etc.) -->
             </ul>
         </section>
 
@@ -164,36 +170,6 @@
                 Peer-reviewed publications will appear here once accepted. The list below
                 covers my current undergraduate thesis, independent research, and competition work.
             </p>
-
-            <!-- SOHC — undergraduate thesis -->
-            <article class="paper-item no-img">
-                <!-- TODO: add a teaser figure at images/paper/sohc_teaser.jpg and remove the .no-img class -->
-                <div class="paper-info">
-                    <span class="conf-badge badge-thesis">SYSU Thesis 2026</span>
-                    <a href="#" class="paper-title">SOHC: SO(n) Orthogonal Hyper-Connections via Cayley Transform</a>
-                    <div class="author-list">
-                        <span class="me">Wenshan Deng</span>, advised by Prof. Liu Wei
-                    </div>
-                    <div class="venue">
-                        Undergraduate Thesis · Sun Yat-sen University, 2026
-                        <span class="oral-tag">In Progress</span>
-                    </div>
-                    <p class="paper-abstract">
-                        Introduces SO(n) rotation-group constraints into hyper-connection residual
-                        structures (mHC → SOHC) via Cayley transforms, building a dual-stream
-                        (<em>isometric</em> + <em>semantic</em>) orthogonal propagation mechanism.
-                        Uses Newton–Schulz iteration for convergence guarantees and 1/√N output
-                        scaling for gradient stability. Consistently outperforms mHC baselines on
-                        sequential recommendation: <strong>+8.5% MRR on ML-100K</strong>,
-                        <strong>+3.6% MRR on ML-1M</strong>.
-                    </p>
-                    <div class="btn-group">
-                        <!-- TODO: link to arXiv once submitted -->
-                        <a href="#" class="btn"><i class="fas fa-file-pdf"></i> Paper (Coming Soon)</a>
-                        <a href="https://github.com/findshan" class="btn"><i class="fab fa-github"></i> Code (Coming Soon)</a>
-                    </div>
-                </div>
-            </article>
 
             <!-- ULTRA-HSTU -->
             <article class="paper-item no-img">
@@ -258,7 +234,7 @@
             <ul class="news-list">
                 <li>
                     <span class="date-tag">2026</span>
-                    <span>KDD Cup 2026 Uni-Rec Challenge · <em>in progress</em>.</span>
+                    <span>KDD Cup 2026 Uni-Rec Challenge · <strong>Top 5% Nationally</strong> (rank 207 / 4000+, final score 0.829).</span>
                 </li>
                 <li>
                     <span class="date-tag">2025</span>

@@ -34,7 +34,10 @@
                 <div class="post-meta">2026 · findshan · 约 12 分钟</div>
             </header>
             <div class="post-content">
-<blockquote><p><strong>作者:findshan</strong>　·　赛事:<strong>百度商业 AI 技术创新大赛 —— 生成式推荐广告排序推理性能优化</strong>(百度 / 飞桨 AI Studio 主办)</p></blockquote>
+<blockquote>
+  <p>赛事 · <strong>百度商业 AI 技术创新大赛</strong></p>
+  <p>子赛道 · 生成式推荐广告排序推理性能优化 · 百度 / 飞桨 AI Studio 主办</p>
+</blockquote>
 <blockquote><p>一道&quot;只许加速、不许改模型&quot;的性能优化赛题。本文从官方 baseline(fp32 直跑 ~238s)讲起,按真实迭代顺序,记录我如何在严格合规约束下,用精度/算法重构 + 4 个手写 Triton kernel,把同一份模型的推理延迟做到 <strong>约 8×</strong>(238s → ~30s),且 AUC/PCOC 全程等价。</p></blockquote>
 <hr>
 <h2>一、赛题:这是一道性能优化题,不是建模题</h2>
