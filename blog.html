@@ -35,6 +35,11 @@
 
         <section>
             <div class="post-list-item">
+                <a href="posts/2026-finv-multimodal-turn-taking.html" class="post-title">从 0.7437 到 0.6094:多模态对话轮次预测赛初复赛复盘</a>
+                <div class="post-meta">2026 &middot; 比赛复盘 / 多模态学习 &middot; 约 15 分钟</div>
+                <div class="post-excerpt">初赛里,大模型、LoRA 与 checkpoint 集成把分数推到 0.7437;复赛里,更高的 valid 却对应更差的 private。一次关于多任务塔头、类别不平衡、阈值校准、分布漂移,以及如何尊重负面实验的真实复盘。</div>
+            </div>
+            <div class="post-list-item">
                 <a href="posts/2026-cti-inference-optimization.html" class="post-title">把一个固定模型的推理从 238s 压到 30s:生成式推荐排序推理优化赛工程复盘</a>
                 <div class="post-meta">2026 &middot; 工程复盘 / GPU · Triton &middot; 约 12 分钟</div>
                 <div class="post-excerpt">一道"只许加速、不许改模型"的性能优化赛题——从百度大赛官方 baseline(fp32 直跑 ~238s)出发,用精度/算法重构 + 4 个手写 Triton kernel,把同一份模型的推理做到约 8×(238s→30s),且 AUC/PCOC 全程等价。</div>

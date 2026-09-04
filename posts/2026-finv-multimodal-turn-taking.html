@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>从 0.7437 到 0.6094:一次多模态对话轮次预测赛的初复赛复盘 &mdash; Wenshan Deng</title>
+    <meta name="robots" content="noindex,nofollow">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght,SOFT,WONK@0,9..144,400..700,30..100,0..1;1,9..144,400..600,30..100,0..1&amp;family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,500;0,8..60,600;0,8..60,700;1,8..60,400;1,8..60,500&amp;family=Inter:wght@400;500;600;700&amp;family=Noto+Serif+SC:wght@500;700&amp;display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="../css/style.css?v=20260519">
+    <script src="../js/main.js?v=20260519" defer></script>
+</head>
+<body>
+
+<nav class="site-nav" aria-label="Primary">
+    <div class="nav-wrapper">
+        <a href="../index.html" class="nav-brand"><span class="dot" aria-hidden="true"></span>Wenshan Deng</a>
+        <div class="nav-links">
+            <a href="../index.html">About</a>
+            <a href="../publications.html">Projects</a>
+            <a href="../blog.html" class="active">Blog</a>
+        </div>
+    </div>
+</nav>
+
+<main>
+    <div class="wrap">
+        <article class="longform-post">
+            <header class="post-header">
+                <p class="post-kicker">Competition · Multimodal Learning</p>
+                <h1 class="post-title">从 0.7437 到 0.6094:一次多模态对话轮次预测赛的初复赛复盘</h1>
+                <div class="post-meta">2026 · findshan · 约 15 分钟</div>
+            </header>
+            <div class="post-content">
+<blockquote>
+  <p>赛事 · <strong>第 11 届 FinvCup 金融科技大赛</strong></p>
+  <p>任务 · 根据 30 秒通话上下文,预测未来 2 秒内的五类话权事件</p>
+</blockquote>
+<blockquote><p>初赛里,更强的模型、更长的训练和 checkpoint 集成把分数推到 <strong>0.7437</strong>;进入复赛后,几乎所有看起来合理的继续训练却一起跌进 <strong>0.58</strong> 的盆地。最终最好的 <strong>0.609358</strong>,来自一个极其克制的方案:保留官方模型,只为五个任务分别校准决策阈值。本文不是一份“冠军方案”,而是一份关于<strong>多模态建模、类别不平衡、验证集失真与如何承认实验事实</strong>的完整复盘。</p></blockquote>
+<hr>
+
+<h2>一、赛题:模型要判断“下一秒谁会说话”</h2>
+<p>每个样本包含三种上下文:</p>
+<ul>
+  <li><strong>音频</strong>:过去 30 秒的双声道通话;</li>
+  <li><strong>文本</strong>:对应的 ASR 转写;</li>
+  <li><strong>历史标签</strong>:按 80ms chunk 记录的话权状态序列。</li>
+</ul>
+<p>模型需要预测未来 2 秒内是否出现 <code>C / NA / I / BC / T</code> 五类事件。它不是普通五分类,而是<strong>多标签预测</strong>:同一个未来窗口可能同时命中多个事件。</p>
+<p>更麻烦的是类别极不平衡。<code>NA</code> 大量出现,<code>BC</code> 却极少;不同标签依赖的信息也不一样:<code>T</code> 可能更依赖语义和轮次结束,<code>I / BC</code> 更依赖停顿、重叠、语调和短时节奏。一个共享分类头既要理解文本,又要捕捉细粒度声学线索,天然存在任务冲突。</p>
+
+<h2>二、我们的模型:音频、文本、历史状态一起看</h2>
+<p>基础架构由四部分组成:</p>
+<ol>
+  <li>Whisper 编码音频;</li>
+  <li>Qwen 编码 ASR 文本;</li>
+  <li>一维卷积编码历史标签序列;</li>
+  <li>拼接多模态表示,输出五个 sigmoid 概率。</li>
+</ol>
+<pre><code>Whisper(audio) ─────┐
+Qwen(text) ─────────┼─&gt; multimodal fusion ─&gt; five event probabilities
+ContextCNN(labels) ─┤
+handcrafted feats ──┘</code></pre>
+<p>这套结构的核心不复杂。真正困难的是训练策略:冻结还是解冻?五个任务是否共享参数?稀有类该靠 loss、采样还是阈值解决?这些问题在初赛和复赛给出了完全不同的答案。</p>
+<hr>
+
+<h2>三、初赛:建模、微调与集成确实有效</h2>
+<p>初赛的迭代逻辑相对“符合直觉”:</p>
+<ul>
+  <li>逐步训练更充分的单模型;</li>
+  <li>解冻 Whisper 后几层,让声学表征适配任务;</li>
+  <li>对文本模型加入 LoRA,控制可训练参数量;</li>
+  <li>用 SpecAugment 和 dropout 抑制过拟合;</li>
+  <li>对多个高质量 checkpoint 做概率平均;</li>
+  <li>对五个标签分别搜索阈值。</li>
+</ul>
+<p>单模型 <code>r061</code> 达到约 <strong>0.7359</strong>,<code>r064</code> 约 <strong>0.7353</strong>;多个 checkpoint 的平均将结果进一步推到 <strong>0.7437</strong>。当时得到的经验很自然:</p>
+<ol>
+  <li>模型还有容量空间;</li>
+  <li>微调音频和文本表征有收益;</li>
+  <li>同一路线的 checkpoint 平均能降低方差;</li>
+  <li>逐类阈值对极不平衡多标签任务很重要。</li>
+</ol>
+<p>如果故事停在这里,结论会非常普通:“大模型 + LoRA + 数据增强 + ensemble”。但复赛换了一套私有测试分布,此前所有成功经验都必须重新接受检验。</p>
+
+<h2>四、复赛第一课:初赛最强模型并不再强</h2>
+<p>复赛的第一个锚点是官方冻结模型。统一阈值 <code>0.5</code> 时,它得到 <strong>0.593773</strong>。我们把初赛 <code>r061</code> 标定出的逐类阈值迁移到官方模型:</p>
+<pre><code>C  = 0.01000
+NA = 0.26756
+I  = 0.64308
+BC = 0.69993
+T  = 0.68170</code></pre>
+<p>没有重新训练,只改变概率到标签的决策边界,分数上升到 <strong>0.609358</strong>,绝对提升 <strong>+0.015585</strong>。这最终成为复赛最高分。</p>
+<p>与此同时,初赛的强模型来到复赛私有集后全部落后:</p>
+<div class="table-wrap"><table><thead><tr><th>模型</th><th>初赛表现</th><th>复赛私有</th></tr></thead><tbody>
+<tr><td>r061 单模</td><td>0.7359</td><td>0.5957</td></tr>
+<tr><td>r064 单模</td><td>0.7353</td><td>0.5942</td></tr>
+<tr><td>r064 avg3</td><td><strong>0.7437</strong></td><td>0.5954</td></tr>
+<tr><td>官方模型 + r061 阈值</td><td>—</td><td><strong>0.609358</strong></td></tr>
+</tbody></table></div>
+<p><strong>初赛上最强的 ensemble,在复赛上几乎没有增益。</strong> 这说明模型们共享的不是随机误差,而是同一种训练分布偏差。平均多个相似错误,不会自动得到正确答案。</p>
+
+<h2>五、一次很合理、却很危险的推理:“是不是还没训够?”</h2>
+<p>看到分数下降时,最自然的反应是继续训练。我们先做最保守的实验:冻结音频和文本 backbone,只继续训练融合层、context encoder 和分类头。</p>
+<p>本地 valid macro-F1 从官方起点继续上涨,最高达到 <strong>0.6279</strong>;私有分却掉到 <strong>0.581134</strong>。也就是说,模型在我们定义的验证集上越来越好,在真正目标分布上却越来越差。</p>
+<p>随后我们沿训练轨迹提交多个固定 step:</p>
+<div class="table-wrap"><table><thead><tr><th>step</th><th>本地 valid</th><th>复赛私有</th></tr></thead><tbody>
+<tr><td>30k</td><td>0.6184</td><td>0.5806</td></tr>
+<tr><td>70k</td><td><strong>0.6277</strong></td><td>0.5803</td></tr>
+<tr><td>90k</td><td>0.6224</td><td>0.5753</td></tr>
+</tbody></table></div>
+<p>这三点足以证伪“训练不够”:多训没有把私有分拉回来,反而平稳或下降。此时继续围绕学习率、epoch、patience 做微调,只是在错误的地图上更精确地导航。</p>
+<blockquote><p><strong>真正的问题不是模型没有拟合,而是它拟合了不该拟合的分布。</strong></p></blockquote>
+
+<h2>六、共享与专用塔头:正确的建模思想,不一定解决主要矛盾</h2>
+<p>针对五个任务的差异,我们设计了共享层 + 任务专用塔:</p>
+<pre><code>multimodal features
+        │
+ shared fusion layer
+   ┌────┼────┬────┬────┐
+   C   NA    I   BC    T
+   task-specific towers</code></pre>
+<p>在 Whisper-base 蒸馏路线中,一个共享的 512 维融合层,接五个 <code>512→128→1</code> 分类塔,再配合任务权重 <code>1 / 0.5 / 2 / 3 / 1.2</code>,将私有分从 <strong>0.593663</strong> 提升到 <strong>0.596768</strong>。这是所有重新训练模型中的最好结果。</p>
+<p>这个实验说明“共享表征 + 专用决策”是有价值的。但当我们换回 Whisper-large-v3,加入更深的 <code>512→128→32→1</code> 专用塔时,本地 valid 达到历史最高 <strong>0.6354</strong>,私有却只有 <strong>0.582398</strong>。</p>
+<p>模型容量越强,valid/private gap 反而越大。这证明塔头不是复赛的主要矛盾。架构改进解决的是<strong>任务间参数冲突</strong>,而我们真正遇到的是<strong>训练域与目标域不一致</strong>。</p>
+
+<h2>七、类别不平衡:loss、采样和阈值不是一回事</h2>
+<p><code>BC</code> 是最难的标签。它的 F1 很低,但 AUC 仍有约 0.76,意味着模型不是完全没有信号,而是“排序尚可、落刀很差”。我们因此尝试了三类方法:</p>
+<ul>
+  <li><strong>pos_weight / task weight</strong>:改变正负样本或不同任务的梯度规模;</li>
+  <li><strong>Focal Loss + oversampling</strong>:让训练更关注稀有类和难样本;</li>
+  <li><strong>逐类阈值</strong>:不改变模型,只改变最终决策边界。</li>
+</ul>
+<p>最稳定的仍是逐类阈值。激进提高 <code>BC / I</code> 的训练权重,常常会牺牲 <code>T</code> 或概率校准,宏平均未必上升。</p>
+<p>我们还犯过一个概念性错误:把 r061 的阈值数值直接当作训练任务权重。阈值表达的是<strong>概率空间中的决策边界</strong>,任务权重表达的是<strong>优化空间中的梯度重要性</strong>,两者没有直接对应关系。这个版本 valid 看起来很好,私有却下降到 <strong>0.586225</strong>。</p>
+
+<h2>八、蒸馏、stride、SWA 与 TTA:四个被实验推翻的期待</h2>
+<h3>8.1 蒸馏让探索更快,但不会凭空带来泛化</h3>
+<p>我们把 Whisper-large 的音频表示蒸馏到 Whisper-base,推理速度约提升 6.7×。直接替换时私有分从 0.609 降到 0.575;适配分类头后可恢复到 0.5937。蒸馏是很好的工程基础设施,但学生模型的容量上限和表示偏差仍然存在。</p>
+
+<h3>8.2 更细 stride 反而更差</h3>
+<div class="table-wrap"><table><thead><tr><th>stride</th><th>私有分</th></tr></thead><tbody>
+<tr><td>20</td><td><strong>0.593663</strong></td></tr>
+<tr><td>10</td><td>0.584100</td></tr>
+<tr><td>5</td><td>0.571423</td></tr>
+</tbody></table></div>
+<p>高度重叠的窗口并没有增加有效信息,而是重复强化局部模式。样本数量更多,不等于信息量更多。</p>
+
+<h3>8.3 同轨迹 checkpoint 平均修不了系统偏差</h3>
+<p>SWA 和 avg checkpoint 适合降低随机方差;但当所有 checkpoint 都向同一个错误分布漂移时,平均只能得到“更平滑的同一种错误”。复赛实测没有带来增益。</p>
+
+<h3>8.4 TTA 的前提是每个视图都可信</h3>
+<p>我们尝试把完整 30 秒上下文与 284、120 chunk 的截断视图平均。结果显著下降。模型最擅长的是完整上下文,短视图本身就是退化输入;把退化预测平均进来,只会稀释最好视图。</p>
+<hr>
+
+<h2>九、初赛与复赛合在一起,我们真正学到了什么</h2>
+<ol>
+  <li><strong>不要把 leaderboard 分数当成模型的固有属性。</strong> r064 avg3 在初赛是 0.7437,换一个测试分布只剩约 0.595。分数属于“模型 × 数据分布 × 决策规则”。</li>
+  <li><strong>先验证验证集。</strong> 如果一个 valid 连“官方模型优于续训模型”这个线上顺序都排不出来,它就不该继续承担选模、早停和调阈三重职责。</li>
+  <li><strong>AUC 有信号、F1 很低时,先看阈值与校准。</strong> 不要第一时间重训整个 backbone。</li>
+  <li><strong>容量只能解决容量问题。</strong> 更大的 Whisper、更深的塔头无法解决分布漂移,还可能让模型更快记住局部规律。</li>
+  <li><strong>一次实验只回答一个问题。</strong> 同时修改架构、loss、采样和阈值,即使涨分也不知道原因;跌分更无法诊断。</li>
+  <li><strong>负面结果也应被系统记录。</strong> “更细 stride 单调下降”“valid 峰值对应私有低谷”比一次偶然涨分更能约束下一步决策。</li>
+</ol>
+
+<h2>十、如果重新做一次</h2>
+<p>我不会从更大的模型开始,而会先重建实验系统:</p>
+<ol>
+  <li>冻结官方权重和原始推理代码,保留不可变基准;</li>
+  <li>按会话长度、说话人结构、标签先验和音频条件建立多个验证域;</li>
+  <li>用 OOF 概率标定逐类阈值,避免在同一 valid 上既选模又调阈;</li>
+  <li>只有代理验证能复现线上“官方 &gt; 续训”排序时,才解冻 backbone;</li>
+  <li>为 <code>I / BC</code> 显式加入 pitch、energy、停顿、重叠与说话人切换等韵律特征;</li>
+  <li>把线上提交当作稀缺的因果实验,而不是随机搜索。</li>
+</ol>
+
+<h2>十一、结语:最难的不是涨分,是停止相信漂亮的 valid</h2>
+<p>初赛教会我们怎样把一个多模态模型做强;复赛教会我们的却是更重要的一课:<strong>当验证体系失真时,更努力地优化指标可能让真实目标越来越远。</strong></p>
+<p>最终最好成绩 <strong>0.609358</strong> 并不来自最复杂的架构,而来自最克制的判断:保留官方模型的泛化点,只修正五个任务的决策边界。它没有达到我们期待的 0.65 或 0.66,但这个没有被包装的结果,反而留下了更真实的方法论。</p>
+<blockquote><p>模型可以继续训练,参数可以继续增加,提交次数也可以继续消耗;但实验已经否定的假设,不应该仅仅因为我们“不甘心”就被继续相信。</p></blockquote>
+<p>完整代码、代表性配置与实验记录已公开在 <a href="https://github.com/findshan/finvcup-multimodal-turntaking" target="_blank" rel="noopener noreferrer">GitHub: finvcup-multimodal-turntaking</a>。仓库不包含比赛数据、模型权重、访问凭据与私有预测文件。</p>
+            </div>
+            <div class="post-footer-actions">
+                <a href="../blog.html" class="btn"><i class="fas fa-arrow-left"></i> 返回 Blog</a>
+            </div>
+        </article>
+    </div>
+</main>
+
+<footer class="site-footer">
+    <span>&copy; <span data-year>2026</span> Wenshan Deng</span>
+    <span class="sep">·</span>
+    <span>Guangzhou</span>
+</footer>
+
+</body>
+</html>
