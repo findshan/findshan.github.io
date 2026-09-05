@@ -34,7 +34,7 @@
         <!-- Hero -->
         <section class="hero" id="about">
             <div class="bio">
-                <div class="hero-eyebrow">Undergraduate · AI Researcher</div>
+                <div class="hero-eyebrow">AI Researcher · Systems Builder</div>
                 <h1 class="name-title">Wenshan Deng<span class="chinese-name">邓文善</span></h1>
                 <div class="affiliation">
                     Sun Yat-sen University
@@ -42,10 +42,9 @@
                     School of Artificial Intelligence
                 </div>
 
-                <!-- TODO: replace with a quote that means something to you -->
                 <blockquote class="motto">
-                    “Make everything as simple as possible, but not simpler.”
-                    <cite>— Albert Einstein</cite>
+                    “Building toward AGI and ASI — through foundation-model research,
+                    agent harness engineering, and systems performance.”
                 </blockquote>
 
                 <p class="lede">
@@ -53,9 +52,9 @@
                     <a href="https://sai.sysu.edu.cn/">School of Artificial Intelligence</a>,
                     Sun Yat-sen University, advised by Prof.
                     <strong>Liu Wei</strong> and Prof. <strong>Yin Jian</strong>.
-                    My long-term passion lies in <strong>foundational large language models</strong> —
-                    understanding how scale, structure, and optimization interact to produce
-                    emergent intelligence.
+                    My long-term goal is to contribute to <strong>AGI and ASI</strong> through
+                    <strong>foundational large language model research</strong> — understanding how
+                    scale, structure, and optimization interact to produce emergent intelligence.
                 </p>
                 <p>
                     My current focus is <strong>agent harness engineering</strong> and
@@ -70,10 +69,10 @@
 
                 <div class="interests">
                     <span class="label">Interests</span>
-                    <span class="item">Large Language Models</span>
+                    <span class="item">Foundation Models</span>
+                    <span class="item">Agent Harness Engineering</span>
+                    <span class="item">Systems Performance</span>
                     <span class="item">Sequential Recommendation</span>
-                    <span class="item">Optimization &amp; Group Theory</span>
-                    <span class="item">Industrial-Scale ML</span>
                 </div>
 
                 <div class="social-icons">
@@ -101,12 +100,20 @@
             </header>
             <ul class="news-list">
                 <li>
+                    <span class="date-tag">2026/09</span>
+                    <span>Released <a href="https://github.com/findshan/ultra-hstu-alibaba-ads" target="_blank" rel="noopener"><strong>ULTRA-HSTU-style multi-task recommendation</strong></a> and published its <a href="posts/2026-ultra-hstu-alibaba-ads.html">Alibaba Display Ad experiment retrospective</a>.</span>
+                </li>
+                <li>
+                    <span class="date-tag">2026/09</span>
+                    <span>Published the <a href="posts/2026-finv-multimodal-turn-taking.html"><strong>FinvCup multimodal turn-taking retrospective</strong></a> and released the <a href="https://github.com/findshan/finvcup-multimodal-turntaking" target="_blank" rel="noopener">code and experiment records</a>, documenting validation/private distribution shift and why per-label calibration outperformed further training.</span>
+                </li>
+                <li>
                     <span class="date-tag">2026/06</span>
                     <span>Published an engineering retrospective: <a href="posts/2026-cti-inference-optimization.html"><strong>238s → 30s</strong> via 4 hand-written Triton kernels with full numerical equivalence</a> — Baidu CTI optimization challenge.</span>
                 </li>
                 <li>
                     <span class="date-tag">2026/06</span>
-                    <span>Finished <strong>KDD Cup 2026 Uni-Rec Challenge</strong>: rank <strong>207 / 4000+</strong>, final score 0.829, <strong>Top 5% nationally</strong>.</span>
+                    <span>Finished <a href="https://github.com/findshan/taac2026-pcvr-hyformer" target="_blank" rel="noopener"><strong>KDD Cup 2026 Uni-Rec Challenge</strong></a>: rank <strong>207 / 4000+</strong>, final score 0.829, <strong>Top 5% nationally</strong>.</span>
                 </li>
                 <li>
                     <span class="date-tag">2025</span>
@@ -171,26 +178,64 @@
                 covers my current undergraduate thesis, independent research, and competition work.
             </p>
 
+            <!-- Baidu CTI inference optimization -->
+            <article class="paper-item no-img">
+                <div class="paper-info">
+                    <span class="conf-badge badge-research">Engineering · GPU / Triton</span>
+                    <a href="posts/2026-cti-inference-optimization.html" class="paper-title">Baidu CTI: Generative Recommendation Inference Optimization</a>
+                    <div class="author-list"><span class="me">Wenshan Deng</span></div>
+                    <div class="venue">Baidu Commercial AI Technology Innovation Competition, 2026</div>
+                    <p class="paper-abstract">
+                        Reduced fixed-model inference from approximately <strong>238s to 30s (≈8×)</strong>
+                        with precision and attention-path restructuring plus four hand-written Triton
+                        kernels, while preserving AUC/PCOC and keeping numerical-check fallbacks.
+                    </p>
+                    <div class="btn-group">
+                        <a href="posts/2026-cti-inference-optimization.html" class="btn"><i class="fas fa-pen"></i> Retrospective</a>
+                    </div>
+                </div>
+            </article>
+
+            <!-- FinvCup multimodal turn-taking -->
+            <article class="paper-item no-img">
+                <div class="paper-info">
+                    <span class="conf-badge badge-comp">Competition · Multimodal Learning</span>
+                    <a href="posts/2026-finv-multimodal-turn-taking.html" class="paper-title">FinvCup: Multimodal Turn-Taking Prediction</a>
+                    <div class="author-list"><span class="me">Wenshan Deng</span></div>
+                    <div class="venue">11th FinvCup FinTech Competition, 2026</div>
+                    <p class="paper-abstract">
+                        Combined Whisper, Qwen, and historical turn-state signals for five-label event
+                        prediction; reached <strong>0.7437</strong> in the preliminary round and used
+                        distribution-shift diagnosis plus per-label threshold calibration to obtain the
+                        best final-round private score of <strong>0.609358</strong>.
+                    </p>
+                    <div class="btn-group">
+                        <a href="https://github.com/findshan/finvcup-multimodal-turntaking" class="btn" target="_blank" rel="noopener"><i class="fab fa-github"></i> Code</a>
+                        <a href="posts/2026-finv-multimodal-turn-taking.html" class="btn"><i class="fas fa-pen"></i> Retrospective</a>
+                    </div>
+                </div>
+            </article>
+
             <!-- ULTRA-HSTU -->
             <article class="paper-item no-img">
                 <div class="paper-info">
                     <span class="conf-badge badge-research">Independent Research</span>
-                    <a href="https://github.com/findshan" class="paper-title">ULTRA-HSTU: Reproducing Meta's Industrial-Scale Recommendation Architecture</a>
+                    <h3 class="paper-title project-title">ULTRA-HSTU-style Multi-task Recommendation on Alibaba Display Ads</h3>
                     <div class="author-list">
                         <span class="me">Wenshan Deng</span>
                     </div>
                     <div class="venue">
-                        Independent Research Project, 2025
+                        Independent Research Project, 2026
                     </div>
                     <p class="paper-abstract">
-                        Reproduced Meta's ULTRA-HSTU industrial recommendation architecture on a
-                        26M-record Alibaba dataset, achieving mean AUC of <strong>0.9524</strong>
-                        across tasks. In-depth study of HSTU (Hierarchical Sequential Transduction
-                        Units) design principles at industrial scale, serving as architectural
-                        foundation for KDD Cup 2026 work.
+                        Adapted HSTU-style sequential modeling for click and post-click behavior
+                        prediction on Alibaba Display Ad data. The 26M full-scale run reached
+                        <strong>0.6841</strong> Click AUC and <strong>0.9524</strong> average
+                        behavior-task AUC.
                     </p>
                     <div class="btn-group">
-                        <a href="https://github.com/findshan" class="btn"><i class="fab fa-github"></i> GitHub</a>
+                        <a href="https://github.com/findshan/ultra-hstu-alibaba-ads" class="btn" target="_blank" rel="noopener"><i class="fab fa-github"></i> Code</a>
+                        <a href="posts/2026-ultra-hstu-alibaba-ads.html" class="btn"><i class="fas fa-pen"></i> Retrospective</a>
                     </div>
                 </div>
             </article>
@@ -199,7 +244,7 @@
             <article class="paper-item no-img">
                 <div class="paper-info">
                     <span class="conf-badge badge-comp">Competition · Top 4%</span>
-                    <a href="https://github.com/findshan" class="paper-title">TAAC2025: Tencent Advertising Algorithm Competition</a>
+                    <h3 class="paper-title project-title">TAAC2025: Tencent Advertising Algorithm Competition</h3>
                     <div class="author-list">
                         <span class="me">Wenshan Deng</span> (Team Leader)
                     </div>
@@ -213,9 +258,6 @@
                         <strong>7× score improvement (0.014 → 0.096)</strong> and
                         <strong>Top 4% ranking nationally</strong>.
                     </p>
-                    <div class="btn-group">
-                        <a href="https://github.com/findshan" class="btn"><i class="fab fa-github"></i> GitHub</a>
-                    </div>
                 </div>
             </article>
 

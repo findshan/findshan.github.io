@@ -687,6 +687,9 @@ section.is-visible .section-title .rule { transform: scaleX(1); }
     opacity: 1;
     transform: translate(0, 0);
 }
+.paper-title.project-title::after {
+    display: none;
+}
 
 .author-list {
     font-family: var(--font-serif);

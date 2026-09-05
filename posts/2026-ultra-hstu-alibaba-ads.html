@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>从 10 万到 2600 万：一次 ULTRA-HSTU 风格多任务广告推荐实验的复盘 · Wenshan Deng</title>
+    <link rel="stylesheet" href="../css/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600;8..60,700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+</head>
+<body>
+<nav class="site-nav"><div class="nav-inner"><a href="../index.html" class="brand">Wenshan Deng</a><div class="nav-links"><a href="../index.html">Home</a><a href="../publications.html">Projects</a><a href="../blog.html" class="active">Blog</a></div></div></nav>
+<main><div class="wrap"><article class="longform-post">
+<header class="post-header"><p class="post-kicker">Independent Research · Recommendation Systems</p><h1 class="post-title">从 10 万到 2600 万：一次 ULTRA-HSTU 风格多任务广告推荐实验的复盘</h1><div class="post-meta">2026 · Wenshan Deng · 约 12 分钟</div></header>
+<div class="post-content">
+<blockquote><p>这是一次为腾讯广告赛备赛而做的历史实验整理，而不是对 Meta 生产系统的“完整复现”。我把 <a href="https://arxiv.org/abs/2602.16986" target="_blank" rel="noopener">ULTRA-HSTU</a> 中可在个人研究环境验证的序列建模思想，适配到 Alibaba Display Ad 的点击与后点击行为预测；本文只使用服务器上仍可定位的源码、配置与训练日志。</p></blockquote>
+<blockquote><p>这次实验最有价值的产物不是某个漂亮分数，而是一次把“模型直觉”变成可追溯证据的训练：行为序列、计算预算和实验口径必须一起设计。</p></blockquote><hr>
+<h2>一、问题：不只预测点击，还要理解点击之后</h2>
+<p>展示广告中的点击是高频信号，加购、收藏和购买更接近业务价值、也更稀疏。只训练 CTR，模型容易学到“什么容易被点”，但未必学到“什么会形成后续意图”。因此实验使用共享序列编码器和多个行为预测头：</p>
+<pre><code>用户历史（item、action、context）
+                 │
+     HSTU-style sequential encoder
+                 │
+      ┌──────────┼──────────┬──────────┐
+    click       cart       fav        buy</code></pre>
+<p>训练中为后点击行为设置独立损失权重；目标是让稀疏任务共享点击带来的表征学习，但不把它们简化为点击的附属标签。</p>
+<h2>二、从论文借了什么，又没有借什么</h2>
+<p>ULTRA-HSTU 的目标是让 self-attention 在超长用户历史上仍能扩展：它把 item 与 action 合并编码，用 Semi-Local Attention（SLA）减少注意力计算，再通过 attention truncation 把后续深层计算集中到更有价值的序列片段。关键不是“不要 self-attention”，而是<strong>保留表达力，同时控制成本</strong>。</p>
+<p>我的实现借用了 item 与行为的联合编码、局部/全局窗口 SLA，以及前层完整序列、后层截断序列的思路。但这不是论文级别的端到端复现：没有数万长度序列、18 层模型、数百张 H100、定制 kernel、FP8/INT4 或生产在线实验。准确说法是：<strong>一次 ULTRA-HSTU-style 的多任务广告推荐适配实验</strong>。</p>
+<h2>三、实验历程：先建立可控锚点，再推到全量数据</h2>
+<p>我没有一开始就押注全量数据，而是把问题拆成四轮实验：先确认架构在 100k 样本上能稳定学习；再通过 loss weight 观察稀疏行为的取舍；最后把已经验证过的序列建模与任务定义推到约 2600 万条样本。这个过程的重点不是反复“调分”，而是让每一轮实验只回答一个问题。</p>
+<div class="table-wrap"><table><thead><tr><th>实验</th><th>数据规模</th><th>设置</th><th>目的</th></tr></thead><tbody><tr><td>Exp #1 · Baseline</td><td>100k</td><td>均衡多任务权重</td><td>建立多行为序列建模的初始锚点</td></tr><tr><td>Exp #2 · Full-scale</td><td>26M</td><td>全量数据、多进程训练</td><td>验证数据规模对 CTR 与稀疏转化任务的影响</td></tr><tr><td>Exp #3 · Weighted</td><td>100k</td><td><code>[0.3, 0.8, 0.8, 1.5]</code></td><td>提高加购、收藏、购买等稀疏行为的梯度权重</td></tr><tr><td>Exp #4 · Radical</td><td>100k</td><td><code>[0.3, 1.5, 1.5, 2.0]</code></td><td>测试激进偏向高价值行为的边界</td></tr></tbody></table></div>
+<p>全量训练不是一次顺滑的扩容。过程中先后经历了作业中断和序列长度越界；修复后才进入完整训练。这些问题让我更早意识到：模型结构只是系统的一部分，数据处理和分布式训练的边界条件同样决定一次实验能否抵达结果。</p>
+<h2>四、最终实验结果：规模带来的不是微调，而是任务表征的变化</h2>
+<p>最终的全量实验使用 Alibaba Display Ad 约 <strong>2600 万条记录</strong>，在 NVIDIA RTX 3090 环境中训练。模型采用 <code>d_model=128</code>、4 层、4 头、最大序列长度 100，并在序列编码中使用 SLA 与 attention truncation。</p>
+<div class="table-wrap"><table><thead><tr><th>实验</th><th>Best Click AUC</th><th>平均行为任务 AUC</th><th>收敛情况</th></tr></thead><tbody><tr><td>Exp #1 · 100k Baseline</td><td>0.5917</td><td>0.7232</td><td>Epoch 4 early stop</td></tr><tr><td>Exp #2 · 26M Full-scale</td><td><strong>0.6841</strong></td><td><strong>0.9524</strong></td><td>Epoch 3 early stop</td></tr><tr><td>Exp #3 · 100k Weighted</td><td>0.5896</td><td>0.7386</td><td>Epoch 4 early stop</td></tr><tr><td>Exp #4 · 100k Radical</td><td>0.5858</td><td>0.7447</td><td>Epoch 3 early stop</td></tr></tbody></table></div>
+<p>全量实验的 click AUC 相比 100k baseline 提升 <strong>0.0924</strong>；cart、fav、buy 的最终 AUC 分别达到 <strong>0.9499 / 0.9676 / 0.9397</strong>。这组结果让我看到一个很明确的现象：小样本下调权能够改变模型对稀疏行为的关注方向，但真正让后点击行为得到稳定表征的，仍然是足够大的行为序列与数据规模。</p>
+<p>与此同时，调权实验也给出反直觉的一课。Weighted 和 Radical 都提高了行为任务的平均 AUC，却没有带来更高的 CTR AUC。也就是说，多任务目标不是“把 buy 权重调大”这样一个单向旋钮；它本质上是在共享表示、点击排序和高价值转化之间重新分配学习能力。</p>
+<h2>五、我从调权实验中学到的：目标不是一个旋钮</h2>
+<p>提高购买等稀疏行为的权重，可能帮助它们获得稳定梯度，也可能削弱 CTR 的排序能力或概率校准。多任务学习不是多个 BCE 的机械相加，而是一次资源分配。下一次我会先定义业务效用，再通过 Pareto 曲线、逐任务校准和独立验证切分选权重；不会只凭单一平均 AUC 宣称“更好”。</p>
+<h2>六、真正的收获：把“像工业系统”拆成可验证的问题</h2>
+<ol><li><strong>结构是否借鉴正确？</strong>编码、SLA 与截断思路对应论文，但仍需逐模块对齐。</li><li><strong>数据是否足够大？</strong>26M 能暴露小样本看不到的现象，但不是论文中的超长 UIH 与生产分布。</li><li><strong>系统是否可扩展？</strong>多进程跑通不等于拥有 kernel、量化、负载均衡和服务端协同优化。</li><li><strong>结果是否可审计？</strong>日志冲突、指标缺失、checkpoint 与配置不绑定，都会削弱结论。</li></ol>
+<p>这也是我之后做比赛和研究时更愿意保留的工作方式：先建锚点，再做单变量实验；把失败轨迹也记录下来；最后才让结论走到简历、主页和公开仓库。</p>
+<h2>七、代码与复现</h2>
+<p>项目代码现已开源：<a href="https://github.com/findshan/ultra-hstu-alibaba-ads" target="_blank" rel="noopener"><strong>github.com/findshan/ultra-hstu-alibaba-ads</strong></a>。仓库包含模型、数据处理、训练脚本、配置和运行依赖；Alibaba 原始数据、处理后样本、checkpoint 与服务器路径均不包含在内。</p>
+<p><em>论文参考：Qin Ding et al., “Bending the Scaling Law Curve in Large-Scale Recommendation Systems”, 2026。</em></p>
+<p><a href="../blog.html" class="btn"><i class="fas fa-arrow-left"></i> 返回 Blog</a></p>
+</div></article></div></main>
+<footer class="site-footer"><span>&copy; <span data-year>2026</span> Wenshan Deng</span><span class="sep">·</span><span>Guangzhou</span></footer>
+</body></html>

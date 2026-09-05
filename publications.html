@@ -40,26 +40,78 @@
                 First peer-reviewed submission planned during graduate study. Stay tuned.
             </p>
 
-            <!-- ========== ULTRA-HSTU ========== -->
+            <!-- ========== Baidu CTI Inference Optimization ========== -->
             <article class="paper-item no-img">
                 <div class="paper-info">
-                    <span class="conf-badge badge-research">Independent Research</span>
-                    <a href="https://github.com/findshan" class="paper-title">ULTRA-HSTU: Reproducing Meta's Industrial-Scale Recommendation Architecture</a>
+                    <span class="conf-badge badge-research">Engineering · GPU / Triton</span>
+                    <a href="posts/2026-cti-inference-optimization.html" class="paper-title">Baidu CTI: Generative Recommendation Inference Optimization</a>
                     <div class="author-list">
                         <span class="me">Wenshan Deng</span>
                     </div>
                     <div class="venue">
-                        Independent Research Project, 2025
+                        Baidu Commercial AI Technology Innovation Competition, 2026
                     </div>
                     <p class="paper-abstract">
-                        Reproduced Meta's ULTRA-HSTU industrial recommendation architecture on a
-                        26M-record Alibaba dataset, achieving mean AUC of <strong>0.9524</strong>
-                        across tasks. In-depth study of HSTU (Hierarchical Sequential Transduction
-                        Units) design principles at industrial scale, serving as architectural
-                        foundation for KDD Cup 2026 work.
+                        Optimized a fixed generative recommendation ranking model from approximately
+                        <strong>238s to 30s (≈8×)</strong> without changing its architecture or
+                        sacrificing AUC/PCOC. Combined precision and attention-path restructuring
+                        with four hand-written Triton kernels for fused MoE, embedding pooling, and
+                        variable-length causal attention, each protected by numerical checks and
+                        dense fallbacks.
                     </p>
                     <div class="btn-group">
-                        <a href="https://github.com/findshan" class="btn"><i class="fab fa-github"></i> GitHub</a>
+                        <a href="posts/2026-cti-inference-optimization.html" class="btn"><i class="fas fa-pen"></i> Engineering Retrospective</a>
+                    </div>
+                </div>
+            </article>
+
+            <!-- ========== FinvCup Multimodal Turn-Taking ========== -->
+            <article class="paper-item no-img">
+                <div class="paper-info">
+                    <span class="conf-badge badge-comp">Competition · Multimodal Learning</span>
+                    <a href="posts/2026-finv-multimodal-turn-taking.html" class="paper-title">FinvCup: Multimodal Turn-Taking Prediction</a>
+                    <div class="author-list">
+                        <span class="me">Wenshan Deng</span>
+                    </div>
+                    <div class="venue">
+                        11th FinvCup FinTech Competition, 2026
+                    </div>
+                    <p class="paper-abstract">
+                        Built a multimodal pipeline combining Whisper audio features, Qwen text
+                        representations, and historical turn-state signals for five-label event
+                        prediction. Reached <strong>0.7437</strong> in the preliminary round through
+                        fine-tuning, augmentation, checkpoint averaging, and per-label calibration;
+                        in the final round, diagnosed validation/private distribution shift and
+                        achieved the best private score of <strong>0.609358</strong> with calibrated
+                        thresholds rather than further overfitting the model.
+                    </p>
+                    <div class="btn-group">
+                        <a href="https://github.com/findshan/finvcup-multimodal-turntaking" class="btn" target="_blank" rel="noopener"><i class="fab fa-github"></i> Code &amp; Experiments</a>
+                        <a href="posts/2026-finv-multimodal-turn-taking.html" class="btn"><i class="fas fa-pen"></i> Competition Retrospective</a>
+                    </div>
+                </div>
+            </article>
+
+            <!-- ========== ULTRA-HSTU ========== -->
+            <article class="paper-item no-img">
+                <div class="paper-info">
+                    <span class="conf-badge badge-research">Independent Research</span>
+                    <h2 class="paper-title project-title">ULTRA-HSTU-style Multi-task Recommendation on Alibaba Display Ads</h2>
+                    <div class="author-list">
+                        <span class="me">Wenshan Deng</span>
+                    </div>
+                    <div class="venue">
+                        Independent Research Project, 2026
+                    </div>
+                    <p class="paper-abstract">
+                        Adapted HSTU-style sequential modeling for click and post-click behavior
+                        prediction on Alibaba Display Ad data. Across four experiments from 100k to
+                        26M samples, the full-scale run reached <strong>0.6841</strong> Click AUC and
+                        <strong>0.9524</strong> average behavior-task AUC.
+                    </p>
+                    <div class="paper-links">
+                        <a href="posts/2026-ultra-hstu-alibaba-ads.html" class="btn"><i class="fas fa-book-open"></i> Retrospective</a>
+                        <a href="https://github.com/findshan/ultra-hstu-alibaba-ads" class="btn" target="_blank"><i class="fab fa-github"></i> GitHub</a>
                     </div>
                 </div>
             </article>
@@ -68,7 +120,7 @@
             <article class="paper-item no-img">
                 <div class="paper-info">
                     <span class="conf-badge badge-comp">Competition · Top 4%</span>
-                    <a href="https://github.com/findshan" class="paper-title">TAAC2025: Tencent Advertising Algorithm Competition</a>
+                    <h2 class="paper-title project-title">TAAC2025: Tencent Advertising Algorithm Competition</h2>
                     <div class="author-list">
                         <span class="me">Wenshan Deng</span> (Team Leader)
                     </div>
@@ -82,9 +134,6 @@
                         <strong>7× score improvement (0.014 → 0.096)</strong> and
                         <strong>Top 4% ranking nationally</strong>.
                     </p>
-                    <div class="btn-group">
-                        <a href="https://github.com/findshan" class="btn"><i class="fab fa-github"></i> GitHub</a>
-                    </div>
                 </div>
             </article>
 
@@ -92,7 +141,7 @@
             <article class="paper-item no-img">
                 <div class="paper-info">
                     <span class="conf-badge badge-comp">KDD Cup 2026 · Top 5%</span>
-                    <a href="#" class="paper-title">KDD Cup 2026 Uni-Rec Challenge</a>
+                    <a href="https://github.com/findshan/taac2026-pcvr-hyformer" class="paper-title" target="_blank" rel="noopener">KDD Cup 2026 Uni-Rec Challenge</a>
                     <div class="author-list">
                         <span class="me">Wenshan Deng</span>
                     </div>
@@ -107,13 +156,10 @@
                         time-jitter augmentation (<strong>+0.003</strong>),
                         and pair-feature alignment (<strong>+0.003</strong>) —
                         reaching <strong>0.829</strong> before plateau. Final rank 207 out of 4000+
-                        teams. Full reflection and code release in the upcoming blog post.
+                        teams.
                     </p>
                     <div class="btn-group">
-                        <!-- TODO: link to KDD Cup blog post once written -->
-                        <a href="#" class="btn"><i class="fas fa-pen"></i> Blog (Coming Soon)</a>
-                        <!-- TODO: link to code release once open-sourced -->
-                        <a href="https://github.com/findshan" class="btn"><i class="fab fa-github"></i> Code (Coming Soon)</a>
+                        <a href="https://github.com/findshan/taac2026-pcvr-hyformer" class="btn" target="_blank" rel="noopener"><i class="fab fa-github"></i> Code &amp; Experiments</a>
                     </div>
                 </div>
             </article>
