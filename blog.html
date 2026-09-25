@@ -35,9 +35,15 @@
 
         <section>
             <div class="post-list-item">
-                <a href="posts/2026-cumcm-bc.html" class="post-title">把两道国赛题做成可复现的系统：CUMCM 2026 B/C 题完整求解复盘</a>
-                <div class="post-meta">2026 &middot; 比赛复盘 / 数学建模 &middot; 约 12 分钟</div>
-                <div class="post-excerpt">B 题用集值估计 + 锯齿巡视把 50 次蒙特卡洛全档位清除率钉在 90.9% 以上；C 题用信息集递进 + 罚金感知 MPC 把全年费用做到距 SDP 最优基准仅 0.16%。一次从"最优性证书"到"最优性基准"的自我修正，与完整开源。</div>
+                <a href="posts/2026-cumcm-c-microgrid.html" class="post-title">课上学的线性规划和动态规划，这次真的用上了：CUMCM 2026 C 题复盘</a>
+                <div class="post-meta">2026 &middot; 比赛复盘 / 优化 &middot; 约 12 分钟</div>
+                <div class="post-excerpt">四个小问被统一成一个模型在信息集逐层收缩下的递进体系；单纯形给答案、对偶给理解、Bellman 给出"离最好还有多远"。也记录 AI 把目标函数写错、把两类代价混成一个数，以及坚称"SDP 是最优性证书"而拿不出证明的完整过程。</div>
+            </div>
+            <div class="post-list-item">
+                <a href="posts/2026-cumcm-b-jammer.html" class="post-title">机器狗、20 个频道和 50 次蒙特卡洛：CUMCM 2026 B 题复盘</a>
+                <div class="post-meta">2026 &middot; 比赛复盘 / 搜索策略 &middot; 约 12 分钟</div>
+                <div class="post-excerpt">在 1800 米圆域里找 10–16 个未知干扰源：集值估计、频道解耦、把 /clear 当廉价二值传感器。附带三个真实错误——读错附件、把几何边界写成 arccos（应为 arcsin）、以及一张画坏了的闭合环。</div>
+            </div>
                 <a href="posts/2026-anthropic-opus-autoresearch.html" class="post-title">我们没有换模型，只是换了让模型工作的方式</a>
                 <div class="post-meta">2026 · AI 系统 / 性能工程 · 约 15 分钟</div>
                 <div class="post-excerpt">同一个 Claude Opus 4.5：先与人类协作把 VLIW 内核做到 1368，再把经验封装成 autoresearch harness，最终走到 1361 cycles。</div>

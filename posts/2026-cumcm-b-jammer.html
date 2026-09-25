@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>机器狗、20 个频道和 50 次蒙特卡洛：CUMCM 2026 B 题复盘 &mdash; Wenshan Deng</title>
+    <meta name="robots" content="noindex,nofollow">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght,SOFT,WONK@0,9..144,400..700,30..100,0..1;1,9..144,400..600,30..100,0..1&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,500;0,8..60,600;0,8..60,700;1,8..60,400;1,8..60,500&family=Inter:wght@400;500;600;700&family=Noto+Serif+SC:wght@500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="../css/style.css?v=20260519">
+    <script src="../js/main.js?v=20260519" defer></script>
+</head>
+<body>
+
+<nav class="site-nav" aria-label="Primary">
+    <div class="nav-wrapper">
+        <a href="../index.html" class="nav-brand"><span class="dot" aria-hidden="true"></span>Wenshan Deng</a>
+        <div class="nav-links">
+            <a href="../index.html">About</a>
+            <a href="../publications.html">Projects</a>
+            <a href="../blog.html" class="active">Blog</a>
+        </div>
+    </div>
+</nav>
+
+<main>
+    <div class="wrap">
+        <article class="longform-post">
+            <header class="post-header">
+                <p class="post-kicker">Competition · Robotics / Search Strategy</p>
+                <h1 class="post-title">机器狗、20 个频道和 50 次蒙特卡洛：CUMCM 2026 B 题复盘</h1>
+                <div class="post-meta">2026 · findshan · 约 12 分钟</div>
+            </header>
+            <div class="post-content">
+<blockquote>
+  <p>赛事 · 2026 年高教社杯全国大学生数学建模竞赛（CUMCM）B 题《无线电干扰源的快速自动定位与清除》</p>
+  <p>结果 · 自研模拟器 50 次蒙特卡洛 × 7 档定向源比例：清除率全档位 <strong>≥ 90.9%</strong>，全向场景 <strong>100% 全清</strong>（平均 3 754 s）</p>
+</blockquote>
+<blockquote><p>B 题和我同一时间做的 C 题完全不是一类东西。C 题是坐在桌前解优化；B 题是<strong>让一只机器狗在半径 1800 米的圆里自己找东西</strong>——10 到 16 个位置未知的干扰源，只知道它在一台测向机的某个频道上，只能在模拟器里一轮一轮地跑、一轮一轮地改策略。这篇复盘写三条撑起整套策略的洞察，也写实战里具体的错误：两个是 AI 助手犯的，一个是我自己把图放大到单张才看出来的。</p></blockquote>
+<hr>
+
+<h2>一、第一晚我就读错了两个附件</h2>
+<p>拿到官方题包，看到 <code>附件1.docx</code>、<code>附件2.docx</code>，我按常识做了判断：附件1 应该是干扰源特征，附件2 大概是交会定位的说明。AI 助手顺着这个假设直接开始建模型，物理设定、接口假设、计时规则全都往下推。</p>
+<p>真正打开文件之后是这样的：</p>
+<ul>
+  <li><strong>附件1</strong>是《模拟器使用说明》——行为规则、虚拟计时、网盘下载、登录注册；</li>
+  <li><strong>附件2</strong>是《模拟器通信接口说明及编程指南》——<code>/enter</code>、<code>/measure</code>、<code>/clear</code>、<code>/exit</code> 四条指令、JSON 字段、HTTP 状态码、幂等与重试规则；</li>
+  <li>干扰源特征其实在<strong>题面的附录1</strong>里，压根不在附件里。</li>
+</ul>
+<p>这个错没有立刻致命（模型的物理设定本来就该来自题面），但它暴露了一个真实的缺陷，而且我必须写下来：<strong>AI 在"高级、成体系的文档阅读"上并不可靠。它会用文件名和上下文先验去补全内容，而不是先把文件真正读一遍。</strong> 附件一多、格式一混（docx / xlsx / PDF 交叉，表格跨页，字段名反直觉），这种"看起来很合理"的补全就会出错——而且错得非常安静，因为它不会说"我没读"，它会直接开始推理。</p>
+<p>从那之后我定了一条规矩，一直用到两题结束：<strong>任何"读"出来的结论，必须带一条可复查的出处（哪个文件、哪张表、哪一行）；给不出出处的，不许进模型。</strong></p>
+
+<h2>二、三条撑起整套策略的洞察</h2>
+<p>把题读对之后，这道题的信息量其实集中在三句话上。</p>
+<p><strong>洞察 1：这是集值估计，不是随机估计。</strong>题面里有一句很不起眼但决定性的话——同一地点重复检测，误差不变；只有换地点，误差才呈现统计规律。也就是说示向度误差不是白噪声，而是一个<strong>位置相关的确定性偏差场</strong>（|e| ≤ 1°）。这直接否定了"多测几次提高精度"的直觉：原地重复检测的信息增益是零。但反过来它送了我一份大礼：真源必定落在 ±1° 楔形的交里，这是<strong>硬保证</strong>而不是置信区间。于是定位问题变成集值估计，可行集的<strong>直径就是天然的不确定度度量</strong>。</p>
+<p>这也是我第一次看懂题目为什么这么问：问题 1 问"定位区域的直径"，问题 2 问"第二个检测点放哪"——它是在给问题 2 提供损失函数。度量 → 优化，一条闭环。</p>
+<p><strong>洞察 2：20 个频道是 20 个独立问题，唯一的耦合是路径。</strong>不同干扰源的信号互不影响，一个频道最多一个源。所以给定机器人的路径和测量时刻表，20 个频道的位置估计可以完全并行地做"楔形交 + 数直径"的在线更新。全局问题因此可以分解：<strong>上层选一条路径，下层逐频道滤波。</strong>很多策略会"追着一个源一路打过去"，丢掉的正是这个分解带来的经济性。</p>
+<p><strong>洞察 3：<code>/clear</code> 是一枚廉价的近距二值传感器。</strong>探测用 <code>/measure</code>（5 s，代价里还要加移动和换频道），清除用 <code>/clear</code>（失败 3 s、成功 5 s，半径 20 m，且<strong>与方向无关</strong>——定向源在背后也照清）。如果当前可行集的直径是 W，用 clear 做网格试探把"发现"概率拉满的期望成本大约是 3(W/20)² 秒：</p>
+<table>
+  <thead><tr><th>可行集直径 W</th><th>期望试探次数</th><th>期望成本</th></tr></thead>
+  <tbody>
+    <tr><td>200 m</td><td>~100</td><td>300 s</td></tr>
+    <tr><td>100 m</td><td>~25</td><td>75 s</td></tr>
+    <tr><td><strong>40 m</strong></td><td>~4</td><td><strong>12 s</strong></td></tr>
+  </tbody>
+</table>
+<p>于是"什么时候该停止测向、直接推进去清剿"就有了一个定量判据：<strong>直径压到 40 米之后，再花移动成本去测方位就不划算了。</strong>测向负责把 1800 米的不确定性压到 40 米，剩下的交给清剿。</p>
+
+<h2>三、AI 把一条几何边界写错了反三角函数</h2>
+<p>问题 2 要保证第二个检测点还能收到信号。约束推出来是一个二次不等式，AI 给出的角度边界是 |α| ≤ <strong>arccos</strong>(1000/d)，并推出"d 趋向 1500 米时上界是 53.13°"。</p>
+<p>正确的写法是 |α| ≤ <strong>arcsin</strong>(r_min/d)，d → 1500 m 时上界是 <strong>41.8°</strong>（另外还有一条对偶形式 |α| ≤ arcsin(r_min/ρ)，因为那个二次式对 d 和 ρ 是对称的）。摘要里残留了旧版数值，是后来逐条核对时才被抓出来的。</p>
+<p>为什么这个错很危险：<strong>它不影响"结论看起来对不对"。</strong>两种写法都能给出同一个定性结论——"第二点要贴着示向度线走，不能纯侧移"，所以肉眼扫过去完全合理。但数值上它把候选区域放宽了 11 度，直接影响问题 2 的答案精度，还会顺着影响问题 3 的巡视几何。<strong>AI 在做解析几何推导时，定性方向往往是对的，错就错在系数和反三角函数上——这恰恰是肉眼最不容易发现的一类错。</strong></p>
+<p>从那以后我们的做法是：<strong>凡是解析解，必须用数值网格独立复算一遍，两条路对上了才允许写进论文。</strong>上面那条 41.8° 的边界，最后是靠把约束丢进网格扫一遍确认的。</p>
+<p>顺着说一句问题 1：题目问"以定位区域直径为直径的圆，能不能覆盖这个区域"，答案不是想当然的"能"。多边形的直径圆只能保证覆盖边界上的两个点，我们用的是 Thales 判据（每个顶点对直径两端点的张角 ≥ 90° ⇔ 被覆盖），并用 Jung 定理给出"最多超出 15.47%"的上界来构造反例。</p>
+
+<h2>四、我自己看出 bug 的那两张图</h2>
+<p>巡视策略要在圆域里画两圈环形航线。第一版图渲出来，我盯着看了很久，觉得内圈"起点和终点没接上"、外圈"多了一小段"。放大到单张图才确认这不是错觉——是代码错了：</p>
+<pre><code>ax.plot([p[0] for p in pts] + [pts[0][0]],
+        [p[1] for p in pts] + [pts[1][1]], ...)   # ← 应为 pts[0][1]</code></pre>
+<p>闭合多边形时闭合点的 y 取了<strong>第二个点</strong>的 y，而不是首点的 y。数值后果：内圈的闭合点跑到了 (1000, 781.8)，离环上最近的点 376 米、离圆心 1269 米（超过半径 1000）；外圈闭合点跑到离圆心 2123 米（超过 1700），于是多出一条竖直短线。<strong>缩略图里完全看不出来，只有放大到单张才现形</strong>——所以"逐张看最终 PNG"后来被我列成了必做项，不是可选项。</p>
+<p>同一批收尾里还有一类更隐蔽的错：LaTeX 报 <code>Extra }, or forgotten \endgroup</code>，报错行落在下一条 <code>\end{table}</code> 上，真正的错因是表格 caption 末尾多了一个 <code>}</code>。我试图"把表格抽成最小文件重打"复现，结果重打时顺手写对了，反而误判表格无罪。<strong>这类错误的正确查法是逐行数括号，不是最小复现。</strong></p>
+
+<h2>五、问题 2 最反直觉的结论：垂直 90° 是错的</h2>
+<p>直觉上，两个测点连线与示向度垂直、交会角 90°，定位误差应该最小——这是课本式的答案。但它和"能收到"这个硬约束直接冲突：源最远 1500 米、接收半径最小 1000 米，<strong>纯侧移必然丢掉远端源</strong>。算下来 |α| ≥ 53.13° 时，"保证第二次也收到"已经无解。</p>
+<p>所以最优在中间：偏角 α* ≈ 31.5°、距离 ρ* ≈ 1054 米，损失 J* ≈ 50.3 米。这条结论不只是问题 2 的答案，它<strong>锁定了问题 3 的巡视几何</strong>——锯齿形折线，而不是垂直三角基线。两道题的路径形状，由一个反三角函数的上界决定。</p>
+
+<h2>六、评估，以及一个立场问题</h2>
+<p>我们写了与官方接口语义对齐的模拟器，按定向源比例分 7 档、每档 50 次蒙特卡洛：</p>
+<table>
+  <thead><tr><th>定向源比例</th><th>我们的清除率</th><th>全清次数</th><th>平均定位清除时间</th><th>基线清除率</th></tr></thead>
+  <tbody>
+    <tr><td>0%（全向）</td><td><strong>100%</strong></td><td>50/50</td><td>3 754 s</td><td>100%</td></tr>
+    <tr><td>20%</td><td><strong>96.5%</strong></td><td>33</td><td>4 513 s</td><td>91.0%</td></tr>
+    <tr><td>50%</td><td><strong>93.1%</strong></td><td>23</td><td>5 371 s</td><td>76.2%</td></tr>
+    <tr><td>100%（全定向）</td><td><strong>90.9%</strong></td><td>16</td><td>6 871 s</td><td>55.0%</td></tr>
+  </tbody>
+</table>
+<p>看基线那一列：它在用<strong>漏检换速度</strong>——定向源一多，清除率从 100% 掉到 55%。而题目原话是"在确保所有干扰源被清除的前提下，完成任务的时间越短越好"。<strong>清除率是约束，不是可以拿去和时间做交换的量。</strong>我们多花约 1.7 倍时间，把全档位的清除率钉在 90% 以上；在最极端的全定向场景，清除率领先基线 35.9 个百分点。</p>
+<p>这道题真正让我记住的不是任何一条策略，而是这个立场：<strong>看清楚题目里哪个量是目标、哪个量是约束。</strong>把约束当目标来交换，模型再精致也是错的。</p>
+<hr>
+<p><strong>开源</strong>：B 题完整代码（自研模拟器、策略、蒙特卡洛评估）、LaTeX 论文源码与 PDF、全部评估数据在 <a href="https://github.com/findshan/cumcm-2026">github.com/findshan/cumcm-2026</a>（<code>B-problem-jammer-localization/</code>）。模拟器自带 <code>selftest.py</code> 协议自检，<code>final_eval.py</code> 一条命令复现上表。</p>
+            </div>
+        </article>
+    </div>
+</main>
+
+</body>
+</html>
