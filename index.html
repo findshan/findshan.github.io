@@ -332,6 +332,46 @@
                     <img src="https://mapmyvisitors.com/map.png?d=A6-H1rGJuH4AajhsSKCNxMIosNEDIsdXJ3BzhiRw0GM&amp;cl=ffffff" alt="Visitor map">
                 </a>
             </noscript>
+            <!-- Fallback: never leave this section blank if the third-party widget is blocked -->
+            <div id="visitorFallback" hidden>
+                <img id="visitorFallbackImg"
+                     src="https://mapmyvisitors.com/map.png?d=A6-H1rGJuH4AajhsSKCNxMIosNEDIsdXJ3BzhiRw0GM&amp;cl=ffffff"
+                     alt="Visitor map">
+                <p id="visitorFallbackNote" class="visitor-fallback-note">
+                    Visitor map could not be loaded &mdash; the third-party widget is unreachable from this network.
+                </p>
+            </div>
+            <script>
+            /* Resilience: if the third-party widget injects nothing within ~3s, show the static map
+               image instead; if that image fails too, keep the explanatory note. If the widget finally
+               arrives, the fallback is withdrawn so the two never show at once. */
+            (function () {
+                var host = document.getElementById('Visitors');
+                var fb = document.getElementById('visitorFallback');
+                var img = document.getElementById('visitorFallbackImg');
+                var note = document.getElementById('visitorFallbackNote');
+                var imgFailed = false;
+                if (img) { img.addEventListener('error', function () { imgFailed = true; }); }
+                function injected() { return host.querySelector('svg, .mapmyvisitors-map-control, iframe'); }
+                function degrade() {
+                    img.style.display = 'none';
+                    note.textContent = 'Visitor map unavailable (third-party service unreachable).';
+                }
+                var n = 0, revealed = false, timer = setInterval(function () {
+                    if (injected()) {
+                        clearInterval(timer);
+                        if (revealed) { fb.hidden = true; }   /* 地图最终来了，撤回兜底 */
+                        return;
+                    }
+                    if (++n === 15) {                          /* ~3 s 仍无内容 */
+                        fb.hidden = false;
+                        revealed = true;
+                        if (imgFailed || !img.complete || img.naturalWidth === 0) { degrade(); }
+                    }
+                    if (n > 75) { clearInterval(timer); }      /* ~15 s 后停止轮询 */
+                }, 200);
+            })();
+            </script>
         </section>
 
     </div>

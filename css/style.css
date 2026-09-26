@@ -1016,6 +1016,14 @@ section.is-visible .section-title .rule { transform: scaleX(1); }
     text-align: center;
 }
 #Visitors .section-title { text-align: left; }
+.visitor-fallback-note {
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    color: var(--muted);
+    letter-spacing: 0.02em;
+    text-align: center;
+    margin-top: 14px;
+}
 
 /* -------------------------------------------------------------
    Footer
