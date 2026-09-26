@@ -2,33 +2,48 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>我们没有换模型，只是换了让模型工作的方式 &mdash; Wenshan Deng</title>
+<title>从 1,368 到 1,148：真正卡住我的不是模型不够强 &mdash; Wenshan Deng</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght,SOFT,WONK@0,9..144,400..700,30..100,0..1;1,9..144,400..600,30..100,0..1&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,500;0,8..60,600;0,8..60,700;1,8..60,400&family=Inter:wght@400;500;600;700&family=Noto+Serif+SC:wght@500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="../css/style.css?v=20260519"><script src="../js/main.js?v=20260519" defer></script>
 </head>
 <body><nav class="site-nav" aria-label="Primary"><div class="nav-wrapper"><a href="../index.html" class="nav-brand"><span class="dot" aria-hidden="true"></span>Wenshan Deng</a><div class="nav-links"><a href="../index.html">About</a><a href="../publications.html">Projects</a><a href="../blog.html" class="active">Blog</a></div></div></nav>
-<main><div class="wrap"><article class="longform-post"><header class="post-header"><p class="post-kicker">AI Systems · Performance Engineering · Autoresearch</p><h1 class="post-title">我们没有换模型，只是换了让模型工作的方式</h1><div class="post-meta">2026 · findshan · 约 15 分钟</div></header><div class="post-content">
-<blockquote><p>同一个 Claude Opus 4.5。第一次，我们坐在模型旁边，一起改代码；第二次，我们退到幕后，只留下一个框架和一句提示词。结果从 <strong>147,734 cycles</strong> 走到了 <strong>1,361 cycles</strong>。</p><p>这不是一篇“AI 帮我写代码”的展示。它更像一次小型实验：当我们把协作变成流程，模型会不会开始自己做研究？</p></blockquote>
+<main><div class="wrap"><article class="longform-post"><header class="post-header"><p class="post-kicker">AI Systems · Performance Engineering · Autoresearch</p><h1 class="post-title">从 1,368 到 1,148：真正卡住我的不是模型不够强</h1><div class="post-meta">2026 · findshan · 约 15 分钟</div></header><div class="post-content">
+<blockquote><p>2026 年 1 月，Anthropic 放出一道性能优化的题目。我用 Claude Opus 4.5 手动把它做到 <strong>1,368 cycles</strong>，离它自己那条 1,363 的参考线只差 5 个。2 月我停在这里。7 月我回来时换了模型，也换了工作方式——同一个问题从 147,734 重头跑，最后停在 <strong>1,148 cycles</strong>。</p><p>这不是一篇“AI 帮我写代码”的展示。我真正想弄清楚的是另一件事：当题目难到模型自己也答不出来的时候，卡住我的到底是它不够强，还是我的方式不对。</p></blockquote>
 <hr>
-<h2>一、先说结果：我们差一点赢过 Claude</h2>
-<p>Anthropic 把自己的 Performance Take-home 放出来时，题目看起来有点像一道普通的优化题：在一台模拟的 VLIW 机器上，优化一个树遍历加哈希的 kernel，最后看它需要多少个 clock cycles。</p>
-<p>但这台机器很快会让人失去耐心。它有 12 个标量 ALU slot、6 个向量 ALU slot、有限的 load/store 和唯一的 flow slot。你写出的不是“代码”，而是一大串必须在正确时间、正确资源上发射的指令。一个依赖关系没看清，程序可能不是慢一点，而是直接算错。</p>
-<p>最初的 baseline 是 <strong>147,734 cycles</strong>。官方公开的 Claude Opus 4.5 improved harness 参考线是 <strong>1,363 cycles</strong>。中间隔着一堵看起来不像人类能翻过去的墙。</p>
-<p>我们最后确实走到了墙边，但第一阶段停在了 <strong>1,368 cycles</strong>。只差 5 个 cycles。那天的感觉很奇怪：明明已经把程序优化了两个数量级，却比“打败 Claude”这句话差得更清楚了。</p>
-<h2>二、第一阶段：人类和 Opus 4.5 坐在同一张桌子前</h2>
-<p>2026 年 2 月，我们和 Claude Opus 4.5 直接协作。不是把题目扔给它然后等待答案，而是很像结对编程：我们读 simulator，讨论 load latency，检查寄存器的读写集合；模型负责把这些判断变成 scheduler、vector kernel 和一轮又一轮的实验。</p>
-<p>最早的改动很朴素：把标量操作变成 SIMD，把三个可以融合的 hash 阶段改成一个 <code>multiply_add</code>。随后是依赖图、list scheduling、wave-based scheduling、浅层树预载和 ALU/VALU 分流。</p>
-<div class="table-wrap"><table><thead><tr><th>阶段</th><th>cycles</th><th>发生了什么</th></tr></thead><tbody><tr><td>Baseline</td><td>147,734</td><td>每条指令单独发射</td></tr><tr><td>向量化</td><td>2,105</td><td>SIMD、hash 融合、依赖调度</td></tr><tr><td>Wave scheduler</td><td>1,425</td><td>跨向量组织相似指令</td></tr><tr><td>后续调度</td><td>1,368</td><td>绝对地址、常量复用、尾部压缩</td></tr></tbody></table></div>
-<p>每一次下降都很令人兴奋，也每一次都很容易让人误判。某个 mux 在纸面上能省掉大量 load，真正运行却会撞上 flow slot；某个看起来无害的寄存器复用，会在几轮之后变成 WAR hazard。我们花了很多时间学习一件不那么浪漫的事：在这种机器上，<strong>“更聪明的代码”不等于“更快的代码”</strong>。</p>
-<p>公开的 <a href="https://github.com/findshan/anthropic_performance_solution">anthropic_performance_solution</a> 保存了这条协作路线。它是一个很好的成果仓库，但它没有回答一个更让我们好奇的问题：如果没有人每一步坐在旁边提醒模型，模型还能不能继续向前？</p>
-<h2>三、差 5 个 cycles 之后，我们换的不是模型</h2>
-<p>最容易做的决定，是再开一个对话，继续让 Opus 4.5 想办法。我们没有这么做。</p>
-<p>因为当时真正的瓶颈已经不是“模型还不知道某个技巧”，而是实验过程太依赖对话上下文：哪条路已经失败过？哪个寄存器不能再动？上一轮为什么保留了这个版本？如果这些信息都留在人的记忆里，所谓“自主优化”其实只是换了一个说法。</p>
-<p>于是我们先写了一个小框架。它只有几条硬规则：</p>
+<h2>一、先说结果</h2>
+<p>Anthropic 把自己的 Performance Take-home 放出来时，题目看起来有点像一道普通的优化题：在一台模拟的 VLIW 机器上优化一个“树遍历 + 哈希”的 kernel，最后看它需要多少个 clock cycles。</p>
+<p>但这台机器很快会让人失去耐心。它有 12 个标量 ALU slot、6 个向量 ALU slot、有限的 load/store 和唯一的 flow slot。我写出的不是“代码”，而是一长串必须在正确时间、正确资源上发射的指令。一个依赖关系没看清，程序不是慢一点，而是直接算错。</p>
+<p>最初的 baseline 是 <strong>147,734 cycles</strong>。官方同时公布了一条参考线：Claude Opus 4.5 加上一版改进过的 harness，能做到 <strong>1,363 cycles</strong>。中间隔着一堵看起来不像人类翻得过去的墙。</p>
+<p>我最后停在 <strong>1,148 cycles</strong>，大约是 baseline 的 129 分之一，比那条参考线低了 215 个 cycles。但这不是我最想讲的部分。我更想讲的是：同样是这道题，我在 1 月和 7 月做的事几乎完全不同，而结果也完全不同。</p>
+<h2>二、三个阶段、两个模型、两种分工</h2>
+<p>在往下讲之前，我想先把“谁在干活”说清楚，因为它比数字更能说明问题。</p>
+<p>这道题的知识不在任何公开语料里——这台机器的 ISA、每条指令的 load latency、slot 之间的竞争关系，全都得现场从 simulator 里一行行读出来。模型查不到，只能我告诉它。这一点决定了三个阶段的分工是彻底不同的：</p>
+<div class="table-wrap"><table><thead><tr><th></th><th>我做什么</th><th>模型做什么</th><th>结果</th></tr></thead><tbody>
+<tr><td><strong>第一幕</strong><br>2026 年 1 月<br>Claude Opus 4.5</td><td>读 simulator、判断 load latency、检查寄存器的读写集合、决定下一条路走哪</td><td>把我的判断变成 scheduler 和 vector kernel，然后一轮轮跑实验</td><td>2,032</td></tr>
+<tr><td><strong>第二幕</strong><br>2026 年 2 月<br>Claude Opus 4.5</td><td>还是在做上面那些事，但越来越多的时间花在重复提醒它“这条已经失败过”</td><td>同上</td><td>1,368</td></tr>
+<tr><td><strong>第三幕</strong><br>2026 年 7 月<br>Claude Opus 4.8</td><td>退到旁边，一次性把规则和边界定好，写 harness，事后审计日志</td><td>在边界内自己选下一个实验、自己判断保留还是丢弃</td><td><strong>1,148</strong></td></tr>
+</tbody></table></div>
+<p>一句话总结：<strong>前两幕，我是那个“记得住的人”，模型是那双“写得快的手”；第三幕我把“记得住”这件事交给了文件，它才开始自己往前走。</strong></p>
+<h2>三、第一幕（1 月，Opus 4.5）：我把判断说给它，它把判断写成代码</h2>
+<p>Anthropic 刚把题目放出来，我就开始做了。不是把题目扔给模型然后等答案，而是很像结对编程：我读 simulator、讨论 load latency、检查寄存器的读写集合；它负责把这些判断变成 scheduler、vector kernel 和一轮又一轮的实验。</p>
+<p>最早的改动很朴素：把标量操作变成 SIMD，把三个可以融合的 hash 阶段改成一个 <code>multiply_add</code>。第一天结束时是 <strong>2,032 cycles</strong>——从 147,734 出发，一天之内跨过了两个数量级。月底继续推到 1,689。</p>
+<p>每一次下降都很令人兴奋，也每一次都很容易让人误判。某个 mux 在纸面上能省掉大量 load，真正运行却会撞上 flow slot；某个看起来无害的寄存器复用，会在几轮之后变成 WAR hazard。我花了很多时间学一件不那么浪漫的事：在这种机器上，<strong>“更聪明的代码”不等于“更快的代码”</strong>。</p>
+<p>公开的 <a href="https://github.com/findshan/anthropic_performance_solution"><code>anthropic_performance_solution</code></a> 保存的就是这条路线。</p>
+<h2>四、第二幕（2 月，还是 Opus 4.5）：差 5 个 cycles</h2>
+<p>2 月我继续用同一个模型往下推：cross-vector 的 wave scheduler 把数字带过 1,425，然后是 1,415、1,388，最后停在 <strong>1,368</strong>。</p>
+<p>1,368 和官方那条 1,363 之间，只差 5 个 cycles。我当时在 CHANGELOG 里写下的是：<code>the bottleneck remains the final speed threshold (expects &lt;1363)</code>。2 月 14 日我又记了一笔——目标是压到 1,300 以下，那天做了三个实验，全部失败。</p>
+<p>但真正的问题不是“还差 5 个 cycles”。是到了这个阶段，<strong>模型已经不知道哪条路试过了。</strong></p>
+<p>我得一遍遍把“这个寄存器不能再动”“这条上次炸了 scratch”“这个版本为什么留着”重新讲给它听。对话越拉越长，上下文越来越挤，到最后，<strong>我成了它唯一的内存</strong>。</p>
+<p>所以那时候卡住我的，其实不是它不够聪明，而是它记不住。</p>
+<p>2 月我停在了 1,368。但我心里一直挂着同一个问题：这个瓶颈，到底是模型不够强，还是我做实验的方式不对？我想继续探索下去。</p>
+<h2>五、我换的不是模型，是我坐的位置</h2>
+<p>7 月我回来接着做。第一件事确实是换模型——Opus 4.5 已经下架了，我把新一代的 Claude Opus 4.8 接进来。我当时想看的是最直接的那件事：光是模型变强，能不能直接把 1,363 撞过去。</p>
+<p>不能。</p>
+<p>于是我决定改的不是模型，是我坐的位置。因为我想明白了一件事：真正的瓶颈从来不是“模型还不知道某个技巧”，而是<strong>整个实验过程都挂在一段对话的上下文里</strong>——哪条路失败过、哪个寄存器不能碰、上一轮为什么保留了这个版本，全靠人记着。如果这些信息只存在于我的脑子里，那所谓的“自主优化”就只是换了一个说法。</p>
+<p>所以我先写了一个小框架，只有几条硬规则：</p>
 <ol><li>agent 只能修改 kernel；</li><li>每次只做一个实验；</li><li>所有结果都通过冻结测试验证；</li><li>变好就保留，变差就丢弃；</li><li>实验历史写进文件，下一轮从历史继续。</li></ol>
-<p>这个框架后来叫 <a href="https://github.com/findshan/perf-evolve"><code>perf-evolve</code></a>。它没有更换模型，也没有给模型一个更长的答案。我们只是把“研究”从一段对话变成了一条可以反复运行的管线。</p>
-<h2>四、Harness：把一次灵感变成一条可以继续的路</h2>
+<p>这个框架后来叫 <a href="https://github.com/findshan/perf-evolve"><code>perf-evolve</code></a>。</p>
 <pre><code>program.md
      │
      ▼
@@ -39,25 +54,28 @@ agent → lab/perf_takehome.py → experiment.py → frozen tests
                                       └─ progress.png</code></pre>
 <p><code>program.md</code> 告诉 agent 如何思考；<code>experiment.py</code> 负责测量和记录；<code>analyze.py</code> 告诉它当前究竟是 load、VALU 还是 scratch 在限制进步；<code>best.py</code> 保存当前最优解；<code>experiments.jsonl</code> 则像一份不会忘记失败的实验日志。</p>
 <p>这里最重要的不是自动化，而是边界。让 agent 自由修改所有东西，很快就会得到一个“通过了自己改过的测试”的漂亮数字。真正可信的进步，必须来自一个 agent 不能随意改动的评分系统。</p>
-<h2>五、第二阶段：让同一个 Opus 4.5 自己走完最后一段</h2>
-<p>接下来我们只保留一条提示词和一套规则，让 Opus 4.5 在 harness 里逐轮尝试。我们不再为每个实验现场解释背景，也不再手动替它挑选下一条路。每一轮只有一个问题：</p>
-<blockquote><p>在不破坏正确性的前提下，当前最值得验证的下一个小改动是什么？</p></blockquote>
-<p>结果并不是一条漂亮的直线。很多实验没有任何收益，有的直接触发 scratch overflow，有的让最终输出错一位。真正留下来的路线是：</p>
-<div class="table-wrap"><table><thead><tr><th>迭代</th><th>cycles</th><th>关键变化</th></tr></thead><tbody><tr><td>0</td><td>147,734</td><td>原始标量实现</td></tr><tr><td>1</td><td>2,105</td><td>SIMD + multiply_add + 依赖图</td></tr><tr><td>2</td><td>1,632</td><td>浅层树预载和 mux</td></tr><tr><td>3</td><td>1,495</td><td>跨 chunk 软件流水</td></tr><tr><td>4</td><td>1,456</td><td>标量 ALU 分流</td></tr><tr><td>5</td><td>1,374</td><td>对角 wavefront 发射</td></tr><tr><td>6</td><td>1,366</td><td>常量广播复用</td></tr><tr><td>7</td><td><strong>1,361</strong></td><td>d=1 mux 代数折叠</td></tr></tbody></table></div>
-<p>最后那一步并不壮观。没有重写整个架构，只是把一个 mux 表达式改写成更便宜的代数形式，少掉 64 个 VALU 操作。但它让我们第一次跨过了 1,363。</p>
-<p>这也是 autoresearch 最迷人的地方：真正的突破可能来自一个很小的改动，而只有持续、诚实、不会忘记失败的实验，才有机会把它找出来。</p>
-<h2>六、1361 之后，问题变成了“还能不能更低”</h2>
-<p>我们当然试过继续往下压。可是这一次，机器开始明确告诉我们边界在哪里。</p>
-<p>每个元素每轮至少要完成 XOR、12 个左右的 hash 操作和分支更新；总算术量已经接近 VALU/ALU 的吞吐上限。另一方面，深层 tree gather 没有真正的向量 gather 指令，load latency 也无法凭空消失。我们的估算下界约在 <strong>1330 cycles</strong> 附近，1361 已经不是“还有很多低垂的果实”，而是接近这套 ISA 能允许的地方。</p>
-<p>这给 autoresearch 提出了一个比“继续跑实验”更难的问题：什么时候应该停止？如果 harness 只会奖励更小的数字，它可能会不断尝试一些看似聪明、实际上只是消耗时间或破坏正确性的方向。下一步我们需要让系统理解的不只是 <em>better</em>，还包括 <em>why better</em>、<em>how trustworthy</em> 和 <em>is there any room left</em>。</p>
-<h2>七、两个仓库，其实是一条故事线</h2>
-<p><a href="https://github.com/findshan/anthropic_performance_solution"><code>anthropic_performance_solution</code></a> 记录的是一次人类和模型共同完成的性能工程；<a href="https://github.com/findshan/perf-evolve"><code>perf-evolve</code></a> 记录的是我们如何把这种协作固化成一个可以继续运行的研究系统。</p>
-<p>一个仓库保存“我们做出了什么”，另一个保存“我们如何让下一轮继续发生”。前者的主角是 kernel，后者的主角是实验循环。把它们放在一起，1361 cycles 才不再是一个孤立的成绩，而是一段完整的过程：从并肩作战，到退到幕后；从一次性答案，到可以不断重启的研究。</p>
-<h2>八、我们真正学到的，不是一个调度技巧</h2>
-<ol><li><strong>模型能力和工作流能力不是一回事。</strong> 同一个 Opus 4.5，换一套反馈结构，就会表现出不同的研究行为。</li><li><strong>实验记忆比漂亮 prompt 更重要。</strong> 失败过的路径如果没有留下来，下一轮就会重新踩进去。</li><li><strong>正确性必须先于性能。</strong> 在公开 benchmark 里，一个修改测试的 1200 cycles 没有意义；一个 1361 cycles 且 9/9 通过的结果才有意义。</li><li><strong>接近下界时，最后几 cycles 需要系统性地寻找。</strong> 靠灵感偶尔能走很远，靠循环才能走完最后一段。</li></ol>
-<h2>结语：我们没有让模型变聪明，只是让它不再忘记</h2>
-<p>第一阶段结束时，我们以为故事是“人类和 Opus 4.5 把一个困难题做到了 1368”。第二阶段结束后，我们觉得那还不是最重要的部分。</p>
-<p>更重要的是，我们看到了一个小小的转折：当人类把约束、测量和记忆搭好之后，模型不必每次都从一句“请帮我优化”开始。它可以带着昨天的失败，走向今天的实验，再把今天的结果留给明天。</p>
-<p>这离真正的 autonomous research 还很远。它仍然需要更好的停止条件、更可靠的 provenance、更公平的模型比较，也需要我们诚实记录哪些地方仍然依赖人类。但至少在这个很小、很具体的 VLIW 世界里，我们看见了一个值得继续追问的可能性：</p>
+<h2>六、第三幕（7 月，Opus 4.8）：同一个问题，我从零重跑了一遍</h2>
+<p>放进 harness 之后，我做了一个决定：<strong>不从 1,368 接着往下推，而是从 147,734 重头开始。</strong></p>
+<p>理由很简单——我想知道这条流程本身行不行，而不是想抢救那个数字。</p>
+<p>真实的过程并不漂亮。7 月 2 日晚上第一条实验记录还是原始的 147,734；六分钟后到 2,254；不到一小时，到了 <strong>1,581</strong>——这已经超过我 2 月手动一整个月的 1,368。第二天早上，对角 wavefront 发射把它带过了 1,300。7 月 6 日，停在了 <strong>1,148 cycles</strong>，大约 129 倍。整个过程留下了 <strong>209 条可复查的实验日志</strong>。</p>
+<p>但我想老实说，中间并不是一路顺风。最难受的时候，我在对话里写下的原话是：</p>
+<blockquote><p>“花了多久，怎么用这么强的模型都没有打败官网的，这个自进化的 harness 好像打不败官方的嘛。”</p></blockquote>
+<p>后来我想清楚了，只留下一句：</p>
+<blockquote><p>“继续破，毕竟我们使用了最强的模型，我们想要看看它的下界是多少。”</p></blockquote>
+<p>这两句话可能比 1,148 更能说明我在做的事——不是为了赢过一个数字，而是想知道它到底还能走到哪。</p>
+<h2>七、模型变强了多少，我没法把它单独摘出来</h2>
+<p>这里我必须诚实：<strong>我没法把 1,148 单独归功于模型，也没法单独归功于流程。</strong> 因为等 7 月我回来的时候，Opus 4.5 已经下架了——我没法用同一个模型再跑一遍 harness，把“换模型”和“换流程”这两件事干净地分开。这是个遗憾。如果当时能做这个对照实验，这件事会讲得清楚得多。</p>
+<p>但有一件事我可以确定：2 月卡住我的原因，从来不是模型不够聪明，而是它记不住。而这条流程第一次跑起来，不到一小时就超过了我手动一个月的成果。</p>
+<p>所以我对“模型能力”的判断也变了。以前我以为，模型变强的意义是它一次能想出更好的 kernel。现在我更相信：<strong>它变强的意义，是能撑住更多轮失败的实验而不跑偏。</strong> 模型能力是上限，工作方式是我能多快接近上限的速度——很长一段时间里，我只有前者。</p>
+<h2>八、这条线还没走完</h2>
+<p>我当然试过继续往下压。但这次机器开始明确告诉我边界在哪里。</p>
+<p>每个元素每轮至少要完成 XOR、12 个左右的 hash 操作和分支更新；总算术量已经接近 VALU/ALU 的吞吐上限（<code>val^node</code> + hash + branch 大约 16 个操作，乘以 4096 个元素再乘以轮次，除以每 cycle 60 个操作）。单看算术，下界大约在 <strong>1,138 cycles</strong>——1,148 只比它高 10。另一方面，深层 tree gather 没有真正的向量 gather 指令，load latency 也不会凭空消失，那里还压着一个大约 1,300 的下限。</p>
+<p>也就是说，后面几乎没有低垂的果实了。这给整件事提出了一个比“继续跑实验”更难的问题：<strong>什么时候应该停止。</strong> 如果一条流程只会奖励更小的数字，它会不断尝试一些看起来聪明、实际上只是在消耗时间甚至破坏正确性的方向。下一步要让它理解的不只是 <em>better</em>，还包括 <em>why better</em>、<em>how trustworthy</em>，以及<em>还有没有空间</em>。</p>
+<p>这段经历最后留给我三件事：</p>
+<ol><li><strong>记住失败，比记住成功更重要。</strong> 失败过的路径如果没有留下来，下一轮就会重新踩进去。</li><li><strong>正确性必须先于性能。</strong> 一个靠改测试换来的 1,200 cycles 没有意义；一个能站住的数字才有意义。</li><li><strong>模型能力和工作流能力不是一回事。</strong> 在我还不懂的知识上，模型的价值是把我的判断变成能跑的代码；在反复试错的阶段，它的价值是能不厌其烦地试下去——只要它记得住。</li></ol>
+<h2>结语：1,148 会过时，那条路不会</h2>
+<p>1 月我以为故事是“我把一个困难题做到了 2,032”。2 月我以为故事是“我只差官方 5 个 cycles”。现在我觉得，那两段都还不是最重要的部分。</p>
+<p>更重要的是我看到了一个很小的转折：当我把约束、测量和记忆都搭好之后，模型不必每次都从一句“请帮我优化”重新开始。它可以带着昨天的失败，走向今天的实验，再把今天的结果留给明天。</p>
+<p>这离真正的 autonomous research 还很远。它仍然需要更好的停止条件、更可靠的 provenance、更公平的模型对照，也需要我诚实记录哪些地方仍然依赖人。但至少在这个很小、很具体的 VLIW 世界里，我看见了一个值得继续追问的可能性：</p>
 <blockquote><p>也许 AI 研究的下一步，不只是让模型给出更好的答案，而是让它拥有一条不会轻易中断的、可以继续做实验的路。</p></blockquote>
 </div></article></div></main><footer class="site-footer"><span>&copy; <span data-year>2026</span> Wenshan Deng</span><span class="sep">·</span><span>Guangzhou</span></footer></body></html>
