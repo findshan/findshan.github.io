@@ -7,7 +7,7 @@
     <meta name="robots" content="noindex,nofollow">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght,SOFT,WONK@0,9..144,400..700,30..100,0..1;1,9..144,400..600,30..100,0..1&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,500;0,8..60,600;0,8..60,700;1,8..60,400;1,8..60,500&family=Inter:wght@400;500;600;700&family=Noto+Serif+SC:wght@500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght,SOFT,WONK@0,9..144,400..700,30..100,0..1;1,9..144,400..600,30..100,0..1&amp;family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,500;0,8..60,600;0,8..60,700;1,8..60,400;1,8..60,500&amp;family=Inter:wght@400;500;600;700&amp;family=Noto+Serif+SC:wght@500;700&amp;display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link rel="stylesheet" href="../css/style.css?v=20260519">
     <script src="../js/main.js?v=20260519" defer></script>
@@ -48,7 +48,7 @@
 <pre><code>min Φ = Σ c·g·Δt  +  Σ [0.5·c·(g−a)⁺ + 1.5·c·(a−g)⁺]·Δt  +  Σ 5·c·e·Δt
         计划购电        调整相关费用（上偏 0.5c / 下偏 1.5c）      紧急购电罚金 5c</code></pre>
 <p>四个小问的差别只在"哪一项是已知的"：</p>
-<table>
+<div class="table-wrap"><table>
   <thead><tr><th></th><th>电价</th><th>光伏</th><th>决策结构</th><th>储能边界</th></tr></thead>
   <tbody>
     <tr><td>问题 1</td><td>固定日曲线</td><td>预测（全知）</td><td>单日一次决策</td><td>日周期 0:00 = 24:00 = 6000 kWh</td></tr>
@@ -56,7 +56,7 @@
     <tr><td>问题 3</td><td>固定日曲线</td><td><strong>仅预报</strong></td><td>0:00 定计划 + 6/12/18 点调整</td><td>日周期 = 6000</td></tr>
     <tr><td>问题 4</td><td><strong>实时波动</strong></td><td>仅预报</td><td>同问题 3</td><td>同问题 3</td></tr>
   </tbody>
-</table>
+</table></div>
 <p>这个统一不是为了论文好看，它直接决定了问题 3 该怎么建。我在做问题 2 的时候注意到一件事：<strong>在完美信息下，"紧急购电"这一项恒为零</strong>——只要"不许向电网售电"写成硬约束，供电就永远不会低于负载。也就是说这个变量在问题 2 里完全不起作用，它唯一能起作用的地方，就是问题 3 里"预报错了导致供电缺口"的场景。那它天生就是一个<strong>罚金项</strong>。</p>
 <p>于是问题 3 的建模不是"再叠加一些不确定性处理"，而是：把调整费用的不对称性和紧急购电罚金一起写进滚动时域的目标里，让滚动优化自己在"多买点保险"和"少花钱"之间权衡。这就是论文里的"罚金感知滚动时域优化"（MPC-II）。它看起来像个花哨的名字，其实是同一模型在同一约束组下推导出来的必然结果。</p>
 
@@ -66,7 +66,7 @@
 <p>课上学对偶时，我很长时间把它当成一种"求解技巧"。这次它成了理解问题的工具。储能每一度电的边际价值由对偶变量给出，套利是否值得就有了判据：<strong>1/η² = 1.235</strong>（η = 0.9 的往返效率）。而实测峰谷比：平均日 2.92，全年日内中位数 4.33——远高于 1.235，意味着<strong>每天都存在套利空间</strong>，这句话是模型结论而不是常识判断。</p>
 <p>对偶还解释了一个容易被忽略的建模选择：题面通篇只出现"购电量"，那就意味着<strong>余电不能卖出</strong>，只能充电或者弃光。所以模型里必须有一个弃光变量 w ≥ 0，否则高辐照日会无解或者被迫虚拟售电。实测最优解里 w 大量为 0，但在高辐照日必须启用——这个细节如果漏掉，问题 2 的费用会算低。</p>
 <p>然后是<strong>灵敏度分析</strong>——我原本以为它只是论文末尾"锦上添花的稳健性检验"，结果它自己产出了最值钱的结论：</p>
-<table>
+<div class="table-wrap"><table>
   <thead><tr><th>扰动</th><th>全年费用变化</th></tr></thead>
   <tbody>
     <tr><td>储能效率 η 0.90 → 0.85</td><td>+3.8%</td></tr>
@@ -75,7 +75,7 @@
     <tr><td>光伏预报误差减半</td><td>省 6.9%</td></tr>
     <tr><td>光伏预报误差翻倍</td><td>多花 13.6%</td></tr>
   </tbody>
-</table>
+</table></div>
 <p>最后两行是整篇论文的转向点：<strong>费用对预报精度近似线性敏感，而对决策方法本身已经接近榨干。</strong>这把"还能怎么改进"这个问题从"换个更聪明的算法"改成了"去把预报做准"。</p>
 
 <h2>三、动态规划那一半：Bellman 给的是"上界"</h2>
@@ -99,7 +99,7 @@
 
 <h2>五、最后的结果</h2>
 <p>把账算成一条瀑布：</p>
-<table>
+<div class="table-wrap"><table>
   <thead><tr><th>环节</th><th>全年费用</th><th>贡献</th></tr></thead>
   <tbody>
     <tr><td>无储能基线</td><td>1 640.7 万元</td><td>—</td></tr>
@@ -109,15 +109,24 @@
     <tr><td>MPC-II 交付方案</td><td><strong>1 424.9 万元</strong></td><td>口径 A：14 248 837.72 元</td></tr>
     <tr><td>SDP 最优性基准（同信息结构）</td><td>13 869 883.17 元</td><td>差 <strong>0.16%</strong></td></tr>
   </tbody>
-</table>
+</table></div>
 <p>风险侧也顺手做了：交付期费用的 VaR/CVaR 尾部风险很小，CVaR₉₅ 只超期望 0.42%；电价情景分析显示<strong>电价的系统性水平（而非其波动性）才是费用的一阶驱动</strong>。</p>
 <p>回头看，这道题教我的最有用的一件事是：<strong>课堂上学的那些"手算过无数遍"的东西——对偶变量、灵敏度扰动、Bellman 递推——在真正的建模里不是解题步骤，而是提问的能力。</strong>对偶让我问出"储能每一度电值多少钱"，灵敏度让我问出"该改哪个参数"，Bellman 让我问出"最好的那条策略长什么样"。会不会解 LP 不重要，能不能问出这些问题才重要。</p>
 <hr>
 <p><strong>开源</strong>：C 题完整代码、LaTeX 论文源码与 PDF、全部求解结果与校验脚本在 <a href="https://github.com/findshan/cumcm-2026">github.com/findshan/cumcm-2026</a>（<code>C-problem-microgrid/</code>）。论文里没有一个手写的数字，四个表格由 <code>gen_tables.py</code> 从求解结果直接生成；全流程一条命令跑完，不到 2 分钟。</p>
             </div>
+            <div class="post-footer-actions">
+                <a href="../blog.html" class="btn"><i class="fas fa-arrow-left"></i> 返回 Blog</a>
+            </div>
         </article>
     </div>
 </main>
+
+<footer class="site-footer">
+    <span>&copy; <span data-year>2026</span> Wenshan Deng</span>
+    <span class="sep">·</span>
+    <span>Guangzhou</span>
+</footer>
 
 </body>
 </html>
